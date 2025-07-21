@@ -5,63 +5,63 @@
   <meta charset="UTF-8" />
   <title>蝦仁成本報價試算表</title>
   <style>
-    body { font-family: 'Segoe UI', sans-serif; background-color: #f0f4f8; padding: 20px; }
-    .container { max-width: 720px; margin: auto; background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; }
-    button { background-color: #007BFF; color: white; border: none; cursor: pointer; }
-    button:hover { background-color: #0056b3; }
-    h2 { color: #333; }
-    .highlight { font-weight: bold; font-size: 18px; color: #d00; }
+    body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f8fb; }
+    .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    input, select, button { padding: 10px; margin: 5px 0; width: 100%; }
+    h2 { text-align: center; }
+    .red-bold { color: red; font-weight: bold; }
+    .flex { display: flex; gap: 10px; }
+    .flex > div { flex: 1; }
+    .btn-link { background: #007bff; color: white; text-align: center; cursor: pointer; }
   </style>
 </head>
 <body>
   <div class="container">
     <h2>蝦仁成本報價試算表</h2>
-    <label>原料重量 (kg)：<input type="number" id="rawWeight" value="16"></label>
-    <label>原料單價 (元/kg)：<input type="number" id="rawPrice" value="420"></label>
-    <label>發泡率 (%)：<input type="number" id="foamRate" value="25"></label>
-    <label>包冰率 (%)：<input type="number" id="iceRate" value="20"></label>
-    <div>
-      <label><input type="checkbox" id="cutBack"> 割背</label>
-      <label><input type="checkbox" id="foamOut"> 委外發泡</label>
-      <label><input type="checkbox" id="foamSelf"> 自行發泡</label>
-      <label><input type="checkbox" id="icePack"> 包冰</label>
-    </div>
-    <button onclick="calculate()">計算成本</button>
-    <p class="highlight" id="costResult"></p>
-    <p class="highlight" id="suggestedPrice"></p>
-    <button onclick="goToBonus()">➡ 前往業務獎金頁</button>
+    <label>原料重量 (kg): <input type="number" id="rawWeight" value="16"></label>
+    <label>原料單價 (元/kg): <input type="number" id="rawPrice" value="420"></label>
+    <label>發泡率 (%): <input type="number" id="foamRate" value="25"></label>
+    <label>包冰率 (%): <input type="number" id="iceRate" value="20"></label>
+    <label><input type="checkbox" id="cut"> 是否割背</label>
+    <label><input type="radio" name="foamType" id="outsourceFoam" checked> 委外發泡</label>
+    <label><input type="radio" name="foamType" id="selfFoam"> 自行發泡</label>
+    <button onclick="calculate()">計算</button>
+    <div id="results"></div>
+    <br>
+    <div class="btn-link" onclick="location.href='bonus.html'">前往業務獎金頁</div>
   </div>
+
 <script>
-  function calculate() {
-    const rw = parseFloat(document.getElementById("rawWeight").value);
-    const rp = parseFloat(document.getElementById("rawPrice").value);
-    const fr = parseFloat(document.getElementById("foamRate").value);
-    const ir = parseFloat(document.getElementById("iceRate").value);
-    const cb = document.getElementById("cutBack").checked;
-    const fo = document.getElementById("foamOut").checked;
-    const fs = document.getElementById("foamSelf").checked;
-    const ice = document.getElementById("icePack").checked;
+function calculate() {
+  const rawWeight = parseFloat(document.getElementById("rawWeight").value);
+  const rawPrice = parseFloat(document.getElementById("rawPrice").value);
+  const foamRate = parseFloat(document.getElementById("foamRate").value) / 100;
+  const iceRate = parseFloat(document.getElementById("iceRate").value) / 100;
+  const cut = document.getElementById("cut").checked;
+  const isOutsource = document.getElementById("outsourceFoam").checked;
 
-    if (!fo && !fs) return alert("請選擇一種發泡方式");
-    if (fo && fs) return alert("只能選擇一種發泡方式");
-    if (!cb && fr > 25) return alert("未割背不得超過25%發泡率");
+  const cutCost = cut ? rawWeight * 13 : 0;
+  const foamWeight = rawWeight * (1 + foamRate);
+  const foamCost = isOutsource ? foamWeight * 15 : foamWeight * 12;
+  const iceWeight = foamWeight / (1 - iceRate);
+  const iceCost = iceWeight * 18;
+  const rawCost = rawWeight * rawPrice;
 
-    const foamWeight = rw * (1 + fr/100);
-    const finalWeight = foamWeight * (1 + (ice ? ir/100 : 0));
-    const cost = rw * rp + (cb ? rw*13 : 0) + (fo ? foamWeight*15 : (fs ? foamWeight*12 : 0)) + (ice ? finalWeight*18 : 0);
-    const costPerKg = cost / finalWeight;
-    const basePrice = costPerKg / 0.85;
+  const totalCost = rawCost + cutCost + foamCost + iceCost;
+  const costPerKg = totalCost / iceWeight;
+  const basePrice = costPerKg / 0.85;
+  const suggestedPrice = costPerKg / 0.75;
 
-    document.getElementById("costResult").innerText = `每公斤底價：${basePrice.toFixed(0)} 元`;
-    document.getElementById("suggestedPrice").innerText = `建議報價：${(basePrice * 1.25).toFixed(0)} 元`;
-    localStorage.setItem("basePrice", basePrice.toFixed(0));
-  }
+  localStorage.setItem("basePrice", basePrice.toFixed(2));
 
-  function goToBonus() {
-    if (!localStorage.getItem("basePrice")) return alert("請先計算成本");
-    window.location.href = "bonus.html";
-  }
+  document.getElementById("results").innerHTML = `
+    <p>總成本：${totalCost.toFixed(0)} 元</p>
+    <p>成品重量：${iceWeight.toFixed(2)} 公斤</p>
+    <p class="red-bold">每公斤成本：${costPerKg.toFixed(0)} 元</p>
+    <p class="red-bold">底價（毛利15%）：${basePrice.toFixed(0)} 元</p>
+    <p class="red-bold">建議售價（毛利25%）：${suggestedPrice.toFixed(0)} 元</p>
+  `;
+}
 </script>
 </body>
 </html>
