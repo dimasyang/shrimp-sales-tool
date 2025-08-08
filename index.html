@@ -1,67 +1,150 @@
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>蝦仁成本報價試算表</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>蝦仁成本報價試算表（RWD 淺色版）</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f8fb; }
-    .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-    input, select, button { padding: 10px; margin: 5px 0; width: 100%; }
-    h2 { text-align: center; }
-    .red-bold { color: red; font-weight: bold; }
-    .flex { display: flex; gap: 10px; }
-    .flex > div { flex: 1; }
-    .btn-link { background: #007bff; color: white; text-align: center; cursor: pointer; }
+    :root{
+      --bg:#f5f5f5;
+      --card:#ffffff;
+      --muted:#555;
+      --text:#222;
+      --brand:#4f8cff;
+      --brand-2:#7aa2ff;
+      --danger:#d9534f;
+      --ok:#32d296;
+      --bd:#ccc;
+      --radius:12px;
+    }
+    *,*::before,*::after{ box-sizing:border-box; }
+    html,body{ height:100%; margin:0; }
+    body{
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      background:var(--bg); color:var(--text);
+    }
+    .container{ max-width:1000px; margin:0 auto; padding: max(env(safe-area-inset-top), 16px) 16px calc(88px + env(safe-area-inset-bottom)); }
+    h1{ font-size: clamp(20px, 3.5vw, 28px); margin:0 0 12px; }
+    p.lead{ color:var(--muted); margin:0 0 18px; }
+    .card{ background:var(--card); border:1px solid var(--bd); border-radius:var(--radius); padding:16px; }
+    .grid{ display:grid; gap:12px; grid-template-columns: 1fr; }
+    @media (min-width:640px){ .grid{ grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width:960px){ .grid{ grid-template-columns: repeat(3, 1fr); } }
+    label span{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+    input, button{
+      width:100%; padding:10px; border-radius:8px; border:1px solid var(--bd); background:#fff; color:var(--text);
+    }
+    .btn{ cursor:pointer; border:1px solid var(--bd); background:#f0f0f0; }
+    .btn.primary{ background:linear-gradient(180deg, var(--brand-2), var(--brand)); border:none; color:#fff; font-weight:600; }
+    .btn.ok{ background:#d4edda; border-color:#c3e6cb; color:#155724; }
+    .btn.danger{ background:#f8d7da; border-color:#f5c6cb; color:#a94442; }
+    .actions{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px; }
+    @media (min-width:640px){ .actions{ grid-template-columns: repeat(4, 1fr); } }
+    .result{ margin-top:10px; background:#fff; border:1px solid var(--bd); border-radius:8px; padding:12px; }
+    .result p{ margin:6px 0; }
+    .result .em{ color:#b00020; font-weight:700; }
+    .dock{
+      position:fixed; left:0; right:0; bottom:0; backdrop-filter: blur(6px);
+      background: rgba(255,255,255,0.9); border-top:1px solid var(--bd);
+      padding:10px 12px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;
+    }
+    @media (min-width:640px){ .dock{ grid-template-columns: repeat(4, 1fr); } }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>蝦仁成本報價試算表</h2>
-    <label>原料重量 (kg): <input type="number" id="rawWeight" value="16"></label>
-    <label>原料單價 (元/kg): <input type="number" id="rawPrice" value="420"></label>
-    <label>發泡率 (%): <input type="number" id="foamRate" value="25"></label>
-    <label>包冰率 (%): <input type="number" id="iceRate" value="20"></label>
-    <label><input type="checkbox" id="cut"> 是否割背</label>
-    <label><input type="radio" name="foamType" id="outsourceFoam" checked> 委外發泡</label>
-    <label><input type="radio" name="foamType" id="selfFoam"> 自行發泡</label>
-    <button onclick="calculate()">計算</button>
-    <div id="results"></div>
-    <br>
-    <div class="btn-link" onclick="location.href='bonus.html'">前往業務獎金頁</div>
+    <header>
+      <h1>🦐 蝦仁成本報價試算表</h1>
+      <p class="lead">手機友善｜自動計算成本、底價（存 localStorage 給獎金頁用）</p>
+    </header>
+
+    <section class="card">
+      <div class="grid">
+        <label><span>原料重量 (kg)</span><input type="number" id="rawWeight" value="16" /></label>
+        <label><span>原料單價 (元/kg)</span><input type="number" id="rawPrice" value="420" /></label>
+        <label><span>發泡率 (%)</span><input type="number" id="foamRate" value="25" /></label>
+        <label><span>包冰率 (%)</span><input type="number" id="iceRate" value="20" /></label>
+        <label><input type="checkbox" id="cut" /> 是否割背（每公斤 +13 元）</label>
+        <label style="grid-column:1 / -1;">
+          <input type="radio" name="foamType" id="outsourceFoam" checked /> 委外發泡（每公斤 +15 元）
+          &nbsp; &nbsp;
+          <input type="radio" name="foamType" id="selfFoam" /> 自行發泡（每公斤 +12 元）
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="btn primary" id="btnCalc">計算</button>
+        <button class="btn" id="btnToBonus">前往獎金頁</button>
+        <button class="btn ok" id="btnCopyBase">複製底價</button>
+        <button class="btn danger" id="btnReset">清空</button>
+      </div>
+
+      <div id="results" class="result" aria-live="polite"></div>
+    </section>
   </div>
 
-<script>
-function calculate() {
-  const rawWeight = parseFloat(document.getElementById("rawWeight").value);
-  const rawPrice = parseFloat(document.getElementById("rawPrice").value);
-  const foamRate = parseFloat(document.getElementById("foamRate").value) / 100;
-  const iceRate = parseFloat(document.getElementById("iceRate").value) / 100;
-  const cut = document.getElementById("cut").checked;
-  const isOutsource = document.getElementById("outsourceFoam").checked;
+  <nav class="dock">
+    <button class="btn primary" id="dockCalc">計算</button>
+    <button class="btn" id="dockToBonus">獎金頁</button>
+    <button class="btn ok" id="dockCopyBase">複製底價</button>
+    <button class="btn danger" id="dockReset">清空</button>
+  </nav>
 
-  const cutCost = cut ? rawWeight * 13 : 0;
-  const foamWeight = rawWeight * (1 + foamRate);
-  const foamCost = isOutsource ? foamWeight * 15 : foamWeight * 12;
-  const iceWeight = foamWeight / (1 - iceRate);
-  const iceCost = iceWeight * 18;
-  const rawCost = rawWeight * rawPrice;
+  <script>
+    function calculate() {
+      const rawWeight = parseFloat(document.getElementById("rawWeight").value || 0);
+      const rawPrice = parseFloat(document.getElementById("rawPrice").value || 0);
+      const foamRate = parseFloat(document.getElementById("foamRate").value || 0) / 100;
+      const iceRate = parseFloat(document.getElementById("iceRate").value || 0) / 100;
+      const cut = document.getElementById("cut").checked;
+      const isOutsource = document.getElementById("outsourceFoam").checked;
 
-  const totalCost = rawCost + cutCost + foamCost + iceCost;
-  const costPerKg = totalCost / iceWeight;
-  const basePrice = costPerKg / 0.85;
-  const suggestedPrice = costPerKg / 0.75;
+      const cutCost = cut ? rawWeight * 13 : 0;
+      const foamWeight = rawWeight * (1 + foamRate);
+      const foamCost = isOutsource ? foamWeight * 15 : foamWeight * 12;
+      const iceWeight = foamWeight / (1 - iceRate);
+      const iceCost = iceWeight * 18;
+      const rawCost = rawWeight * rawPrice;
 
-  localStorage.setItem("basePrice", basePrice.toFixed(2));
+      const totalCost = rawCost + cutCost + foamCost + iceCost;
+      const costPerKg = iceWeight > 0 ? (totalCost / iceWeight) : 0;
+      const basePrice = costPerKg / 0.85;
+      const suggestedPrice = costPerKg / 0.75;
 
-  document.getElementById("results").innerHTML = `
-    <p>總成本：${totalCost.toFixed(0)} 元</p>
-    <p>成品重量：${iceWeight.toFixed(2)} 公斤</p>
-    <p class="red-bold">每公斤成本：${costPerKg.toFixed(0)} 元</p>
-    <p class="red-bold">底價（毛利15%）：${basePrice.toFixed(0)} 元</p>
-    <p class="red-bold">建議售價（毛利25%）：${suggestedPrice.toFixed(0)} 元</p>
-  `;
-}
-</script>
+      localStorage.setItem("basePrice", basePrice.toFixed(2));
+
+      document.getElementById("results").innerHTML = `
+        <p>總成本：<span class="em">${totalCost.toFixed(0)}</span> 元</p>
+        <p>成品重量：<span class="em">${iceWeight.toFixed(2)}</span> 公斤</p>
+        <p>每公斤成本：<span class="em">${costPerKg.toFixed(0)}</span> 元</p>
+        <p>底價（毛利15%）：<span class="em" id="basePriceText">${basePrice.toFixed(0)}</span> 元</p>
+        <p>建議售價（毛利25%）：<span class="em">${suggestedPrice.toFixed(0)}</span> 元</p>
+      `;
+    }
+
+    function copyBase(){
+      const bp = document.getElementById("basePriceText")?.innerText || localStorage.getItem("basePrice") || "";
+      if(!bp){ alert("請先計算一次底價"); return; }
+      navigator.clipboard.writeText(bp).then(()=> alert("已複製底價："+bp));
+    }
+
+    function resetForm(){
+      ["rawWeight","rawPrice","foamRate","iceRate"].forEach(id => document.getElementById(id).value = "");
+      document.getElementById("cut").checked = false;
+      document.getElementById("outsourceFoam").checked = true;
+      document.getElementById("selfFoam").checked = false;
+      document.getElementById("results").innerHTML = "";
+      localStorage.removeItem("basePrice");
+    }
+
+    function goBonus(){
+      location.href = "bonus_rwd.html";
+    }
+
+    ["btnCalc","dockCalc"].forEach(id=> document.getElementById(id).onclick = calculate);
+    ["btnToBonus","dockToBonus"].forEach(id=> document.getElementById(id).onclick = goBonus);
+    ["btnCopyBase","dockCopyBase"].forEach(id=> document.getElementById(id).onclick = copyBase);
+    ["btnReset","dockReset"].forEach(id=> document.getElementById(id).onclick = resetForm);
+  </script>
 </body>
 </html>

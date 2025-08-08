@@ -1,141 +1,190 @@
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>業務獎金計算</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>業務獎金計算（RWD 淺色版）</title>
   <style>
-    body { font-family: 'Segoe UI', sans-serif; background-color: #eef4fb; padding: 20px; }
-    .container { max-width: 720px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 0 12px rgba(0,0,0,0.1); }
-    input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; }
-    button { background-color: #28a745; color: white; border: none; cursor: pointer; font-size: 18px; padding: 16px; }
-    button:hover { background-color: #218838; }
-    .highlight { font-weight: bold; font-size: 18px; color: #d00; }
+    :root{
+      --bg:#f5f5f5;
+      --card:#ffffff;
+      --muted:#555;
+      --text:#222;
+      --brand:#4f8cff;
+      --brand-2:#7aa2ff;
+      --danger:#d9534f;
+      --ok:#32d296;
+      --bd:#ccc;
+      --radius:12px;
+    }
+    *,*::before,*::after{ box-sizing:border-box; }
+    html,body{ height:100%; margin:0; }
+    body{
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      background:var(--bg); color:var(--text);
+    }
+    .container{ max-width:1000px; margin:0 auto; padding: max(env(safe-area-inset-top), 16px) 16px calc(88px + env(safe-area-inset-bottom)); }
+    h1{ font-size: clamp(20px, 3.5vw, 28px); margin:0 0 12px; }
+    p.lead{ color:var(--muted); margin:0 0 18px; }
+    .card{ background:var(--card); border:1px solid var(--bd); border-radius:var(--radius); padding:16px; }
+    .grid{ display:grid; gap:12px; grid-template-columns: 1fr; }
+    @media (min-width:640px){ .grid{ grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width:960px){ .grid{ grid-template-columns: repeat(3, 1fr); } }
+    label span{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+    input, button{ width:100%; padding:10px; border-radius:8px; border:1px solid var(--bd); background:#fff; color:#222; }
+    .btn{ cursor:pointer; border:1px solid var(--bd); background:#f0f0f0; }
+    .btn.primary{ background:linear-gradient(180deg, var(--brand-2), var(--brand)); border:none; color:#fff; font-weight:600; }
+    .btn.ok{ background:#d4edda; border-color:#c3e6cb; color:#155724; }
+    .btn.danger{ background:#f8d7da; border-color:#f5c6cb; color:#a94442; }
+    .actions{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px; }
+    @media (min-width:640px){ .actions{ grid-template-columns: repeat(4, 1fr); } }
+    .highlight{ font-weight:700; color:#b00020; }
+    .notice{ font-size:12px; color:var(--muted); }
+    .table{ background:#fff; border:1px solid var(--bd); border-radius:8px; padding:12px; margin-top:12px; }
+    .dock{
+      position:fixed; left:0; right:0; bottom:0; backdrop-filter: blur(6px);
+      background: rgba(255,255,255,0.9); border-top:1px solid var(--bd);
+      padding:10px 12px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;
+    }
+    @media (min-width:640px){ .dock{ grid-template-columns: repeat(4, 1fr); } }
+    pre{ white-space: pre-wrap; background:#fafafa; border:1px solid var(--bd); border-radius:8px; padding:10px; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>業務獎金計算</h2>
-    <p>每公斤底價（四捨五入）：<span id="basePriceDisplay">-</span> 元</p>
-    <label>業務姓名：<input type="text" id="salesName"></label>
-    <label>銷售品名：<input type="text" id="productName"></label>
-    <label>成交重量 (kg)：<input type="number" id="actualWeight"></label>
-    <label>成交單價 (元/kg)：<input type="number" id="actualPrice"></label>
-    <div>
-      <label><input type="checkbox" id="homeDelivery"> 宅配（扣250元）</label>
-      <label><input type="checkbox" id="selfDelivery"> 自行配送（每公斤加3元）</label>
-      <label><input type="checkbox" id="companyDriver"> 公司司機（每公斤扣3元）</label>
-      <label><input type="checkbox" id="kaohsiungLocal"> 高雄市區公司車（加5元）</label>
-    </div>
-    <button onclick="calculateBonus()">計算獎金</button>
-    <p class="highlight">本次獎金：<span id="bonusResult">0</span> 元</p>
-<div id="historyDisplay" style="margin-top:20px; white-space: pre-wrap; background:#f9f9f9; padding:10px; border:1px solid #ccc; border-radius:6px;"></div>
-    <p>本月累積獎金：<span id="totalBonus">0</span> 元</p>
-    <button onclick="exportCSV()">📄 匯出報價報表</button>
-    
-    <button onclick="clearBonus()">🗑 清除上一筆獎金紀錄</button>
+    <header>
+      <h1>💼 業務獎金計算</h1>
+      <p class="lead">讀取主頁底價（localStorage）｜每筆獎金記錄本月，跨月自動歸檔</p>
+    </header>
 
+    <section class="card">
+      <p>每公斤底價（四捨五入）：<span id="basePriceDisplay" class="highlight">-</span> 元</p>
+      <div class="grid">
+        <label><span>業務姓名</span><input type="text" id="salesName" placeholder="請輸入業務姓名" /></label>
+        <label><span>銷售品名</span><input type="text" id="productName" placeholder="請輸入銷售品名" /></label>
+        <label><span>成交重量 (kg)</span><input type="number" id="actualWeight" placeholder="0" /></label>
+        <label><span>成交單價 (元/kg)</span><input type="number" id="actualPrice" placeholder="0" /></label>
+      </div>
 
-<div id="historyDisplay" style="margin-top:20px; white-space: pre-wrap; background:#f9f9f9; padding:10px; border:1px solid #ccc; border-radius:6px;"></div>
+      <div class="grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
+        <label><input type="checkbox" id="homeDelivery" /> 宅配（扣250元）</label>
+        <label><input type="checkbox" id="selfDelivery" /> 自行配送（每公斤加3元）</label>
+        <label><input type="checkbox" id="companyDriver" /> 公司司機（每公斤扣3元）</label>
+        <label><input type="checkbox" id="kaohsiungLocal" /> 高雄市區公司車（加5元）</label>
+      </div>
 
-<button onclick="goBack()">⬅ 返回主頁</button>
+      <div class="actions">
+        <button class="btn primary" id="btnCalc">計算獎金</button>
+        <button class="btn ok" id="btnExport">匯出 CSV</button>
+        <button class="btn" id="btnHome">返回主頁</button>
+        <button class="btn danger" id="btnClearOne">清除上一筆</button>
+      </div>
+
+      <p class="highlight">本次獎金：<span id="bonusResult">0</span> 元</p>
+      <p>本月累積獎金：<span id="totalBonus">0</span> 元</span></p>
+      <div class="table">
+        <strong>紀錄</strong>
+        <pre id="historyDisplay"></pre>
+      </div>
+      <p class="notice">提示：每到新月份會自動將上月紀錄移入歷史區。</p>
+    </section>
   </div>
-<script>
-  const base = Math.round(parseFloat(localStorage.getItem("basePrice") || "0"));
-  let bonusData = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-  document.getElementById("basePriceDisplay").innerText = base.toFixed(0);
-  updateTotal(); showHistory();
 
-  
-  // Reset bonus data on the first day of a new month
-  const today = new Date();
-  const currentMonth = today.getFullYear() + "-" + (today.getMonth() + 1);
-  const lastMonthKey = localStorage.getItem("bonusMonth");
+  <nav class="dock">
+    <button class="btn primary" id="dockCalc">計算</button>
+    <button class="btn ok" id="dockExport">匯出 CSV</button>
+    <button class="btn" id="dockHome">主頁</button>
+    <button class="btn danger" id="dockClearOne">清除上一筆</button>
+  </nav>
 
-  if (lastMonthKey && lastMonthKey !== currentMonth) {
-    // Backup current month bonus to history
-    let history = JSON.parse(localStorage.getItem("bonusHistory") || "[]");
-    history.push({ month: lastMonthKey, data: bonusData });
-    localStorage.setItem("bonusHistory", JSON.stringify(history));
-    // Reset monthly bonus
-    bonusData = [];
-    localStorage.setItem("monthlyBonus", JSON.stringify(bonusData));
-  }
+  <script>
+    const base = Math.round(parseFloat(localStorage.getItem("basePrice") || "0"));
+    let bonusData = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+    document.getElementById("basePriceDisplay").innerText = isFinite(base) ? base.toFixed(0) : "-";
+    updateTotal(); showHistory();
 
-  localStorage.setItem("bonusMonth", currentMonth);
+    (function handleMonthChange(){
+      const d = new Date();
+      const key = d.getFullYear() + "-" + (d.getMonth()+1);
+      const last = localStorage.getItem("bonusMonth");
+      if (last && last !== key) {
+        const history = JSON.parse(localStorage.getItem("bonusHistory") || "[]");
+        history.push({ month: last, data: bonusData });
+        localStorage.setItem("bonusHistory", JSON.stringify(history));
+        bonusData = [];
+        localStorage.setItem("monthlyBonus", JSON.stringify(bonusData));
+      }
+      localStorage.setItem("bonusMonth", key);
+    })();
 
-  function showHistory() {
-    const current = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-    const history = JSON.parse(localStorage.getItem("bonusHistory") || "[]");
-    let output = "📘 本月紀錄：\n";
-    if (current.length === 0) {
-      output += "（尚無）\n";
-    } else {
-      current.forEach(r => {
+    function showHistory() {
+      const current = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+      const history = JSON.parse(localStorage.getItem("bonusHistory") || "[]");
+      let output = "📘 本月紀錄：\n";
+      if (current.length === 0) output += "（尚無）\n";
+      else current.forEach(r => {
         output += `  🕒 ${r.date} - ${r.name} 銷售 ${r.product} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元\n`;
       });
-    }
-    if (history.length > 0) {
-      output += "\n📚 歷史紀錄：\n";
-      history.forEach(entry => {
-        output += `📅 ${entry.month}\n`;
-        entry.data.forEach(r => {
-          output += `  🕒 ${r.date} - ${r.name} 銷售 ${r.product} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元\n`;
+      if (history.length > 0) {
+        output += "\n📚 歷史紀錄：\n";
+        history.forEach(entry => {
+          output += `📅 ${entry.month}\n`;
+          entry.data.forEach(r => {
+            output += `  🕒 ${r.date} - ${r.name} 銷售 ${r.product} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元\n`;
+          });
+          output += "\n";
         });
-        output += "\n";
-      });
+      }
+      document.getElementById("historyDisplay").innerText = output;
     }
-    document.getElementById("historyDisplay").innerText = output;
-  }
-function calculateBonus() {
-    const actual = parseFloat(document.getElementById("actualPrice").value);
-    const weight = parseFloat(document.getElementById("actualWeight").value);
-    const sales = document.getElementById("salesName").value.trim();
-    const product = document.getElementById("productName").value.trim();
-    if (!sales || !product) return alert("請輸入業務姓名與銷售品名");
-    const deduct = document.getElementById("homeDelivery").checked ? 250 : 0;
-    const addSelf = document.getElementById("selfDelivery").checked ? weight * 3 : 0;
-    const deductDriver = document.getElementById("companyDriver").checked ? weight * 3 : 0;
-    const addKaohsiung = document.getElementById("kaohsiungLocal").checked ? 5 : 0;
-    const diff = actual - base;
-    const bonus = diff > 0 ? diff * weight - deduct - deductDriver + addSelf + addKaohsiung : 0;
-    document.getElementById("bonusResult").innerText = bonus.toFixed(0);
-    const total = actual * weight;
-    bonusData.push({ date: new Date().toLocaleString(), name: sales, product, weight, price: actual, total, bonus: bonus.toFixed(0) });
-    localStorage.setItem("monthlyBonus", JSON.stringify(bonusData));
-    updateTotal(); showHistory();
-  }
 
-  function updateTotal() {
-    const total = bonusData.reduce((sum, r) => sum + parseFloat(r.bonus), 0);
-    document.getElementById("totalBonus").innerText = total.toFixed(0);
-  }
-
-  function exportCSV() {
-    let csv = "業務姓名,銷售品名,數量(kg),成交單價,總金額,獎金,日期\n";
-    bonusData.forEach(r => {
-      csv += `${r.name},${r.product},${r.weight},${r.price},${r.total},${r.bonus},${r.date}\n`;
-    });
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "業務獎金報價報表.csv";
-    link.click();
-  }
-
-  function goBack() {
-    window.location.href = "index.html";
-  }
-
-  function clearBonus() {
-    if (confirm("確定要刪除上一筆獎金紀錄？")) {
-      bonusData.pop(); // 移除最後一筆
+    function calculateBonus() {
+      const actual = parseFloat(document.getElementById("actualPrice").value || 0);
+      const weight = parseFloat(document.getElementById("actualWeight").value || 0);
+      const sales = document.getElementById("salesName").value.trim();
+      const product = document.getElementById("productName").value.trim();
+      if (!sales || !product) return alert("請輸入業務姓名與銷售品名");
+      const deduct = document.getElementById("homeDelivery").checked ? 250 : 0;
+      const addSelf = document.getElementById("selfDelivery").checked ? weight * 3 : 0;
+      const deductDriver = document.getElementById("companyDriver").checked ? weight * 3 : 0;
+      const addKaohsiung = document.getElementById("kaohsiungLocal").checked ? 5 : 0;
+      const diff = actual - base;
+      const bonus = diff > 0 ? diff * weight - deduct - deductDriver + addSelf + addKaohsiung : 0;
+      document.getElementById("bonusResult").innerText = isFinite(bonus) ? bonus.toFixed(0) : "0";
+      const total = actual * weight;
+      bonusData.push({ date: new Date().toLocaleString(), name: sales, product, weight, price: actual, total, bonus: Number(bonus.toFixed(0)) });
       localStorage.setItem("monthlyBonus", JSON.stringify(bonusData));
       updateTotal(); showHistory();
-      alert("已刪除上一筆紀錄");
     }
-  }
 
-</script>
+    function updateTotal() {
+      const total = bonusData.reduce((sum, r) => sum + (Number(r.bonus)||0), 0);
+      document.getElementById("totalBonus").innerText = isFinite(total) ? total.toFixed(0) : "0";
+    }
+
+    function exportCSV() {
+      let csv = "業務姓名,銷售品名,數量(kg),成交單價,總金額,獎金,日期\n";
+      bonusData.forEach(r => {
+        csv += `${r.name},${r.product},${r.weight},${r.price},${r.total},${r.bonus},${r.date}\n`;
+      });
+      const blob = new Blob([\"\uFEFF\" + csv], { type: \"text/csv;charset=utf-8;\" });
+      const link = document.createElement(\"a\"); link.href = URL.createObjectURL(blob); link.download = \"業務獎金報表.csv\"; link.click();
+    }
+
+    function clearBonus() {
+      if (!bonusData.length) return alert(\"目前沒有可刪除的紀錄\");
+      if (confirm(\"確定要刪除上一筆獎金紀錄？\")) {
+        bonusData.pop();
+        localStorage.setItem(\"monthlyBonus\", JSON.stringify(bonusData));
+        updateTotal(); showHistory();
+        alert(\"已刪除上一筆紀錄\");
+      }
+    }
+
+    [\"btnCalc\",\"dockCalc\"].forEach(id=> document.getElementById(id).onclick = calculateBonus);
+    [\"btnExport\",\"dockExport\"].forEach(id=> document.getElementById(id).onclick = exportCSV);
+    [\"btnHome\",\"dockHome\"].forEach(id=> document.getElementById(id).onclick = ()=> location.href = \"index_rwd.html\");
+    [\"btnClearOne\",\"dockClearOne\"].forEach(id=> document.getElementById(id).onclick = clearBonus);
+  </script>
 </body>
 </html>
