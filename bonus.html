@@ -64,6 +64,7 @@
         <label><span>銷售品名</span><input type="text" id="productName" placeholder="請輸入銷售品名" /></label>
         <label><span>成交重量 (kg)</span><input type="number" id="actualWeight" placeholder="0" /></label>
         <label><span>成交單價 (元/kg)</span><input type="number" id="actualPrice" placeholder="0" /></label>
+        <label><span>成本 (元/kg)</span><input type="number" id="costPerKg" placeholder="自動帶入底價，可手動修改" /></label>
       </div>
 
       <div class="grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
@@ -102,6 +103,16 @@
     let bonusData = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
     document.getElementById("basePriceDisplay").innerText = isFinite(base) ? base.toFixed(0) : "-";
     updateTotal(); showHistory();
+    // ✅ 預填「成本(元/kg)」：從首頁 localStorage.basePrice 帶入
+    (function prefillCost(){
+      const input = document.getElementById("costPerKg");
+      const stored = localStorage.getItem("basePrice");
+      if (input && !input.value && stored && isFinite(parseFloat(stored))) {
+        // 以整數帶入較好輸入，如需小數可把 Math.round 拿掉
+        input.value = Math.round(parseFloat(stored));
+      }
+    })();
+
 
     (function handleMonthChange(){
       const d = new Date();
@@ -148,13 +159,25 @@
       const addSelf = document.getElementById("selfDelivery").checked ? weight * 3 : 0;
       const deductDriver = document.getElementById("companyDriver").checked ? weight * 3 : 0;
       const addKaohsiung = document.getElementById("kaohsiungLocal").checked ? 5 : 0;
-      const diff = actual - base;
+      const costInputVal = parseFloat(document.getElementById("costPerKg")?.value);
+      const cost = isFinite(costInputVal) ? costInputVal : base;
+      const diff = actual - cost;
       const bonus = diff > 0 ? diff * weight - deduct - deductDriver + addSelf + addKaohsiung : 0;
       document.getElementById("bonusResult").innerText = isFinite(bonus) ? bonus.toFixed(0) : "0";
       const total = actual * weight;
       bonusData.push({ date: new Date().toLocaleString(), name: sales, product, weight, price: actual, total, bonus: Number(bonus.toFixed(0)) });
       localStorage.setItem("monthlyBonus", JSON.stringify(bonusData));
       updateTotal(); showHistory();
+    // ✅ 預填「成本(元/kg)」：從首頁 localStorage.basePrice 帶入
+    (function prefillCost(){
+      const input = document.getElementById("costPerKg");
+      const stored = localStorage.getItem("basePrice");
+      if (input && !input.value && stored && isFinite(parseFloat(stored))) {
+        // 以整數帶入較好輸入，如需小數可把 Math.round 拿掉
+        input.value = Math.round(parseFloat(stored));
+      }
+    })();
+
     }
 
     function updateTotal() {
@@ -177,6 +200,16 @@
         bonusData.pop();
         localStorage.setItem(\"monthlyBonus\", JSON.stringify(bonusData));
         updateTotal(); showHistory();
+    // ✅ 預填「成本(元/kg)」：從首頁 localStorage.basePrice 帶入
+    (function prefillCost(){
+      const input = document.getElementById("costPerKg");
+      const stored = localStorage.getItem("basePrice");
+      if (input && !input.value && stored && isFinite(parseFloat(stored))) {
+        // 以整數帶入較好輸入，如需小數可把 Math.round 拿掉
+        input.value = Math.round(parseFloat(stored));
+      }
+    })();
+
         alert(\"已刪除上一筆紀錄\");
       }
     }
