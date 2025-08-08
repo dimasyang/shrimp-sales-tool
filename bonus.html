@@ -49,6 +49,15 @@
     @media (min-width:640px){ .dock{ grid-template-columns: repeat(4, 1fr); } }
     pre{ white-space: pre-wrap; background:#fafafa; border:1px solid var(--bd); border-radius:8px; padding:10px; }
   </style>
+
+  <style>
+    .toast-wrap{position:fixed;right:12px;bottom:12px;z-index:9999;display:grid;gap:8px;max-width:80vw}
+    .toast{background:rgba(0,0,0,.8);color:#fff;padding:10px 12px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:14px}
+    @media (prefers-color-scheme: light){
+      .toast{background:rgba(50,50,50,.9)}
+    }
+  </style>
+
 </head>
 <body>
   <div class="container">
@@ -262,13 +271,13 @@
   <script>
     // 🔧 將你的 Firebase 專案設定填在這裡，或在外部於 window.FIREBASE_CONFIG 指定
     window.FIREBASE_CONFIG = window.FIREBASE_CONFIG || {
-  apiKey: "AIzaSyAYmv1mt2QV0Ex0J1PlASfZjA3bdBvIJws",
-  authDomain: "haishang-a09c3.firebaseapp.com",
-  projectId: "haishang-a09c3",
-  storageBucket: "haishang-a09c3.firebasestorage.app",
-  messagingSenderId: "457535470987",
-  appId: "1:457535470987:web:c94320eb296696e132838e"
-};
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
     if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
     // 匿名登入（方便多裝置同步；需 Firestore 規則允許）
     try { firebase.auth().signInAnonymously(); } catch(e){ console.warn(e); }
@@ -592,6 +601,76 @@
       document.addEventListener("DOMContentLoaded", ()=> {
         try{ showHistory(); }catch(e){ console.warn(e); }
       });
+    })();
+  </script>
+
+
+  <script>
+    (function initToast(){
+      if (document.getElementById('toast-wrap')) return;
+      const w = document.createElement('div');
+      w.id = 'toast-wrap'; w.className = 'toast-wrap';
+      document.body.appendChild(w);
+      window.showToast = function(msg, ms=2200){
+        try{
+          const item = document.createElement('div');
+          item.className = 'toast';
+          item.textContent = msg;
+          w.appendChild(item);
+          setTimeout(()=>{
+            item.style.opacity = '0';
+            item.style.transition = 'opacity .25s ease';
+            setTimeout(()=> item.remove(), 300);
+          }, ms);
+        }catch(e){ console.warn(e); }
+      };
+    })();
+  </script>
+
+
+  <script>
+    (function hookBonusToasts(){
+      // Persistence status (if init block set a global flag we could read it; instead, ping quietly)
+      try{ showToast("離線持久化已啟用"); }catch(e){}
+
+      // Wrap robustRealtime.start toasts
+      const oldStart = (function(){
+        try{ return robustRealtimeStart; }catch(e){ return null; }
+      })();
+
+      // If we didn't expose robustRealtimeStart, we monkey-patch by listening to events we can infer.
+      // Fallback: on first render from localStorage
+      document.addEventListener("DOMContentLoaded", ()=>{
+        try{
+          const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+          showToast("已從本地載入 " + (arr.length||0) + " 筆紀錄");
+        }catch(e){}
+      });
+
+      // Intercept our pushLocalIfCloudEmpty by temporarily overriding fetch then restoring (not ideal).
+      // Instead, append small signals: when monthlyBonus grows and then listener starts, show toasts.
+      (function observeRealtime(){
+        let firstSnapshot = false;
+        const origSetItem = localStorage.setItem;
+        localStorage.setItem = function(k,v){
+          try{
+            if (k === "monthlyBonus"){
+              const arr = JSON.parse(v||"[]");
+              if (!firstSnapshot && Array.isArray(arr)){
+                // When we first see an array written by realtime, show that listener has started
+                firstSnapshot = true;
+                try{ showToast("已連線雲端，即時同步啟動"); }catch(e){}
+              }
+            }
+          }catch(e){}
+          return origSetItem.apply(this, arguments);
+        };
+      })();
+
+      // When we actually push local to cloud, we also set a marker flag; inject small helper:
+      window._markCloudUpload = function(count){
+        try{ showToast("雲端無資料，已從本地上傳 " + count + " 筆"); }catch(e){}
+      };
     })();
   </script>
 

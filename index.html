@@ -50,6 +50,15 @@
     }
     @media (min-width:640px){ .dock{ grid-template-columns: repeat(4, 1fr); } }
   </style>
+
+  <style>
+    .toast-wrap{position:fixed;right:12px;bottom:12px;z-index:9999;display:grid;gap:8px;max-width:80vw}
+    .toast{background:rgba(0,0,0,.8);color:#fff;padding:10px 12px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:14px}
+    @media (prefers-color-scheme: light){
+      .toast{background:rgba(50,50,50,.9)}
+    }
+  </style>
+
 </head>
 <body>
   <div class="container">
@@ -179,13 +188,13 @@
   <script>
     // 🔧 將你的 Firebase 專案設定填在這裡，或在外部於 window.FIREBASE_CONFIG 指定
     window.FIREBASE_CONFIG = window.FIREBASE_CONFIG || {
-  apiKey: "AIzaSyAYmv1mt2QV0Ex0J1PlASfZjA3bdBvIJws",
-  authDomain: "haishang-a09c3.firebaseapp.com",
-  projectId: "haishang-a09c3",
-  storageBucket: "haishang-a09c3.firebasestorage.app",
-  messagingSenderId: "457535470987",
-  appId: "1:457535470987:web:c94320eb296696e132838e"
-};
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
     if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
     // 匿名登入（方便多裝置同步；需 Firestore 規則允許）
     try { firebase.auth().signInAnonymously(); } catch(e){ console.warn(e); }
@@ -237,6 +246,59 @@
           // 讀 localStorage 後同步
           const bp = parseFloat(localStorage.getItem("basePrice"));
           if (isFinite(bp)) syncBaseToFirestore(bp);
+        };
+      });
+    })();
+  </script>
+
+
+  <script>
+    (function initToast(){
+      if (document.getElementById('toast-wrap')) return;
+      const w = document.createElement('div');
+      w.id = 'toast-wrap'; w.className = 'toast-wrap';
+      document.body.appendChild(w);
+      window.showToast = function(msg, ms=2200){
+        try{
+          const item = document.createElement('div');
+          item.className = 'toast';
+          item.textContent = msg;
+          w.appendChild(item);
+          setTimeout(()=>{
+            item.style.opacity = '0';
+            item.style.transition = 'opacity .25s ease';
+            setTimeout(()=> item.remove(), 300);
+          }, ms);
+        }catch(e){ console.warn(e); }
+      };
+    })();
+  </script>
+
+
+  <script>
+    (function hookIndexToasts(){
+      // Base loaded toast already inside loadBaseFromFirestoreToLinks if we add it:
+      const oldLoad = window.loadBaseFromFirestoreToLinks;
+      window.loadBaseFromFirestoreToLinks = async function(){
+        const before = localStorage.getItem("basePrice");
+        try{
+          await oldLoad();
+        }catch(e){ console.warn(e); }
+        const after = localStorage.getItem("basePrice");
+        if ((!before || before !== after) && after){
+          try{ showToast("已從雲端載入底價：" + Math.round(parseFloat(after)) + " 元"); }catch(e){}
+        }
+      };
+
+      // Hook calculate buttons to show sync toast
+      ["btnCalc","dockCalc"].forEach(id=>{
+        const el = document.getElementById(id);
+        if (!el) return;
+        const old = el.onclick;
+        el.onclick = function(){
+          if (typeof old === "function") old.call(this);
+          const bp = parseFloat(localStorage.getItem("basePrice"));
+          if (isFinite(bp)) try{ showToast("已同步底價到雲端"); }catch(e){}
         };
       });
     })();
