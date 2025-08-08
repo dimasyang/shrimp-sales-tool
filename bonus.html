@@ -31,8 +31,8 @@
     @media (min-width:640px){ .grid{ grid-template-columns: repeat(2, 1fr); } }
     @media (min-width:960px){ .grid{ grid-template-columns: repeat(3, 1fr); } }
     label span{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
-    input, button{ width:100%; padding:10px; border-radius:8px; border:1px solid var(--bd); background:#fff; color:#222; }
-    .btn{ cursor:pointer; border:1px solid var(--bd); background:#f0f0f0; }
+    input, button, a.btn{ width:100%; padding:10px; border-radius:8px; border:1px solid var(--bd); background:#fff; color:#222; }
+    .btn{ cursor:pointer; border:1px solid var(--bd); background:#f0f0f0; text-decoration:none; display:block; text-align:center; }
     .btn.primary{ background:linear-gradient(180deg, var(--brand-2), var(--brand)); border:none; color:#fff; font-weight:600; }
     .btn.ok{ background:#d4edda; border-color:#c3e6cb; color:#155724; }
     .btn.danger{ background:#f8d7da; border-color:#f5c6cb; color:#a94442; }
@@ -77,7 +77,7 @@
       <div class="actions">
         <button class="btn primary" id="btnCalc">計算獎金</button>
         <button class="btn ok" id="btnExport">匯出 CSV</button>
-        <button class="btn" id="btnHome">返回主頁</button>
+        <a class="btn" id="btnHome" href="./index.html">返回主頁</a>
         <button class="btn danger" id="btnClearOne">清除上一筆</button>
       </div>
 
@@ -94,130 +94,506 @@
   <nav class="dock">
     <button class="btn primary" id="dockCalc">計算</button>
     <button class="btn ok" id="dockExport">匯出 CSV</button>
-    <button class="btn" id="dockHome">主頁</button>
+    <a class="btn" id="dockHome" href="./index.html">主頁</a>
     <button class="btn danger" id="dockClearOne">清除上一筆</button>
   </nav>
 
+  
   <script>
-    const base = Math.round(parseFloat(localStorage.getItem("basePrice") || "0"));
-    let bonusData = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-    document.getElementById("basePriceDisplay").innerText = isFinite(base) ? base.toFixed(0) : "-";
-    updateTotal(); showHistory();
-    // ✅ 預填「成本(元/kg)」：從首頁 localStorage.basePrice 帶入
-    (function prefillCost(){
-      const input = document.getElementById("costPerKg");
-      const stored = localStorage.getItem("basePrice");
-      if (input && !input.value && stored && isFinite(parseFloat(stored))) {
-        // 以整數帶入較好輸入，如需小數可把 Math.round 拿掉
-        input.value = Math.round(parseFloat(stored));
-      }
-    })();
+    // ---- Utilities ----
+    const $ = (id)=> document.getElementById(id);
+    const num = (v)=> { const n = parseFloat(v); return isFinite(n) ? n : null; };
 
+    function getBaseFromPriority(){
+      const fromInput = num($("costPerKg")?.value);
+      if (fromInput !== null) return fromInput;
+      const urlBp = num(new URLSearchParams(location.search).get("bp"));
+      if (urlBp !== null) return urlBp;
+      const stored = num(localStorage.getItem("basePrice"));
+      if (stored !== null) return stored;
+      return null;
+    }
 
-    (function handleMonthChange(){
-      const d = new Date();
-      const key = d.getFullYear() + "-" + (d.getMonth()+1);
+    function prefillCost(){
+      const el = $("costPerKg");
+      if (!el || el.value.trim() !== "") return;
+      const v = getBaseFromPriority();
+      if (v !== null) el.value = String(Math.round(v));
+    }
+
+    function updateBaseDisplay(){
+      const el = $("basePriceDisplay");
+      const v = getBaseFromPriority();
+      el.innerText = v !== null ? String(Math.round(v)) : "-";
+    }
+
+    function monthKey(d = new Date()){
+      return d.getFullYear() + "-" + String(d.getMonth()+1);
+    }
+
+    function loadMonthly(){
+      return JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+    }
+    function saveMonthly(arr){
+      localStorage.setItem("monthlyBonus", JSON.stringify(arr||[]));
+    }
+
+    function handleMonthRollover(){
+      const nowKey = monthKey();
       const last = localStorage.getItem("bonusMonth");
-      if (last && last !== key) {
+      if (last && last !== nowKey){
         const history = JSON.parse(localStorage.getItem("bonusHistory") || "[]");
-        history.push({ month: last, data: bonusData });
+        const current = loadMonthly();
+        history.push({ month: last, data: current });
         localStorage.setItem("bonusHistory", JSON.stringify(history));
-        bonusData = [];
-        localStorage.setItem("monthlyBonus", JSON.stringify(bonusData));
+        saveMonthly([]);
       }
-      localStorage.setItem("bonusMonth", key);
-    })();
+      localStorage.setItem("bonusMonth", nowKey);
+    }
 
-    function showHistory() {
-      const current = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+    function showHistory(){
+      const current = loadMonthly();
       const history = JSON.parse(localStorage.getItem("bonusHistory") || "[]");
-      let output = "📘 本月紀錄：\n";
-      if (current.length === 0) output += "（尚無）\n";
+      let out = "📘 本月紀錄：\n";
+      if (current.length === 0) out += "（尚無）\n";
       else current.forEach(r => {
-        output += `  🕒 ${r.date} - ${r.name} 銷售 ${r.product} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元\n`;
+        out += `  🕒 ${r.date} - ${(r.name||"")} 銷售 ${(r.product||"")} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元\n`;
       });
-      if (history.length > 0) {
-        output += "\n📚 歷史紀錄：\n";
+      if (history.length){
+        out += "\n📚 歷史紀錄：\n";
         history.forEach(entry => {
-          output += `📅 ${entry.month}\n`;
+          out += `📅 ${entry.month}\n`;
           entry.data.forEach(r => {
-            output += `  🕒 ${r.date} - ${r.name} 銷售 ${r.product} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元\n`;
+            out += `  🕒 ${r.date} - ${(r.name||"")} 銷售 ${(r.product||"")} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元\n`;
           });
-          output += "\n";
+          out += "\n";
         });
       }
-      document.getElementById("historyDisplay").innerText = output;
+      $("historyDisplay").innerText = out;
     }
 
-    function calculateBonus() {
-      const actual = parseFloat(document.getElementById("actualPrice").value || 0);
-      const weight = parseFloat(document.getElementById("actualWeight").value || 0);
-      const sales = document.getElementById("salesName").value.trim();
-      const product = document.getElementById("productName").value.trim();
-      if (!sales || !product) return alert("請輸入業務姓名與銷售品名");
-      const deduct = document.getElementById("homeDelivery").checked ? 250 : 0;
-      const addSelf = document.getElementById("selfDelivery").checked ? weight * 3 : 0;
-      const deductDriver = document.getElementById("companyDriver").checked ? weight * 3 : 0;
-      const addKaohsiung = document.getElementById("kaohsiungLocal").checked ? 5 : 0;
-      const costInputVal = parseFloat(document.getElementById("costPerKg")?.value);
-      const cost = isFinite(costInputVal) ? costInputVal : base;
+    function updateTotal(){
+      const total = loadMonthly().reduce((s, r)=> s + (Number(r.bonus)||0), 0);
+      $("totalBonus").innerText = isFinite(total) ? total.toFixed(0) : "0";
+    }
+
+    function calculateBonus(){
+      // 不再強制要求姓名/品名；若空白也允許計算
+      const actual = num($("actualPrice").value);
+      const weight = num($("actualWeight").value);
+      if (actual === null || weight === null || weight <= 0){
+        alert("請輸入有效的成交單價與重量");
+        return;
+      }
+
+      const cost = getBaseFromPriority();
+      if (cost === null){
+        alert("請先輸入『成本(元/kg)』或回主頁計算底價");
+        return;
+      }
+
+      const deduct = $("homeDelivery").checked ? 250 : 0;
+      const addSelf = $("selfDelivery").checked ? weight * 3 : 0;
+      const deductDriver = $("companyDriver").checked ? weight * 3 : 0;
+      const extraKaoCar = $("kaohsiungLocal").checked ? 5 : 0; // 整筆 -5
+
       const diff = actual - cost;
-      const bonus = diff > 0 ? diff * weight - deduct - deductDriver + addSelf + addKaohsiung : 0;
-      document.getElementById("bonusResult").innerText = isFinite(bonus) ? bonus.toFixed(0) : "0";
-      const total = actual * weight;
-      bonusData.push({ date: new Date().toLocaleString(), name: sales, product, weight, price: actual, total, bonus: Number(bonus.toFixed(0)) });
-      localStorage.setItem("monthlyBonus", JSON.stringify(bonusData));
+      const bonus = diff > 0 ? diff * weight - deduct - deductDriver + addSelf - extraKaoCar : 0;
+
+      $("bonusResult").innerText = isFinite(bonus) ? bonus.toFixed(0) : "0";
+
+      const sales = $("salesName").value.trim();
+      const product = $("productName").value.trim();
+      const record = {
+        date: new Date().toLocaleString(),
+        name: sales,
+        product,
+        weight,
+        price: actual,
+        total: actual * weight,
+        bonus: Number(bonus.toFixed(0))
+      };
+      const arr = loadMonthly();
+      arr.push(record);
+      saveMonthly(arr);
       updateTotal(); showHistory();
-    // ✅ 預填「成本(元/kg)」：從首頁 localStorage.basePrice 帶入
-    (function prefillCost(){
-      const input = document.getElementById("costPerKg");
-      const stored = localStorage.getItem("basePrice");
-      if (input && !input.value && stored && isFinite(parseFloat(stored))) {
-        // 以整數帶入較好輸入，如需小數可把 Math.round 拿掉
-        input.value = Math.round(parseFloat(stored));
-      }
-    })();
-
     }
 
-    function updateTotal() {
-      const total = bonusData.reduce((sum, r) => sum + (Number(r.bonus)||0), 0);
-      document.getElementById("totalBonus").innerText = isFinite(total) ? total.toFixed(0) : "0";
-    }
-
-    function exportCSV() {
+    function exportCSV(){
+      const arr = loadMonthly();
       let csv = "業務姓名,銷售品名,數量(kg),成交單價,總金額,獎金,日期\n";
-      bonusData.forEach(r => {
-        csv += `${r.name},${r.product},${r.weight},${r.price},${r.total},${r.bonus},${r.date}\n`;
+      arr.forEach(r => {
+        csv += `${r.name||""},${r.product||""},${r.weight},${r.price},${r.total},${r.bonus},${r.date}\n`;
       });
-      const blob = new Blob([\"\uFEFF\" + csv], { type: \"text/csv;charset=utf-8;\" });
-      const link = document.createElement(\"a\"); link.href = URL.createObjectURL(blob); link.download = \"業務獎金報表.csv\"; link.click();
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "業務獎金報表.csv"; a.click();
     }
 
-    function clearBonus() {
-      if (!bonusData.length) return alert(\"目前沒有可刪除的紀錄\");
-      if (confirm(\"確定要刪除上一筆獎金紀錄？\")) {
-        bonusData.pop();
-        localStorage.setItem(\"monthlyBonus\", JSON.stringify(bonusData));
-        updateTotal(); showHistory();
-    // ✅ 預填「成本(元/kg)」：從首頁 localStorage.basePrice 帶入
-    (function prefillCost(){
-      const input = document.getElementById("costPerKg");
-      const stored = localStorage.getItem("basePrice");
-      if (input && !input.value && stored && isFinite(parseFloat(stored))) {
-        // 以整數帶入較好輸入，如需小數可把 Math.round 拿掉
-        input.value = Math.round(parseFloat(stored));
+    function clearBonus(){
+      const arr = loadMonthly();
+      if (!arr.length){ alert("目前沒有可刪除的紀錄"); return; }
+      if (!confirm("確定要刪除上一筆獎金紀錄？")) return;
+      arr.pop(); saveMonthly(arr);
+      updateTotal(); showHistory();
+      alert("已刪除上一筆紀錄");
+    }
+
+    // ---- Init ----
+    document.addEventListener("DOMContentLoaded", () => {
+      prefillCost();
+      updateBaseDisplay();
+      handleMonthRollover();
+      updateTotal();
+      showHistory();
+
+      ["btnCalc","dockCalc"].forEach(id => $(id).addEventListener("click", calculateBonus));
+      ["btnExport","dockExport"].forEach(id => $(id).addEventListener("click", exportCSV));
+      // 不再覆寫回主頁 href，沿用 HTML 既有的 ./index.html
+      ["btnClearOne","dockClearOne"].forEach(id => $(id).addEventListener("click", clearBonus));
+      $("costPerKg")?.addEventListener("input", updateBaseDisplay);
+    });
+  </script>
+
+
+  <!-- Firebase compat CDN (no UI changes) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script>
+    // 🔧 將你的 Firebase 專案設定填在這裡，或在外部於 window.FIREBASE_CONFIG 指定
+    window.FIREBASE_CONFIG = window.FIREBASE_CONFIG || {
+  apiKey: "AIzaSyAYmv1mt2QV0Ex0J1PlASfZjA3bdBvIJws",
+  authDomain: "haishang-a09c3.firebaseapp.com",
+  projectId: "haishang-a09c3",
+  storageBucket: "haishang-a09c3.firebasestorage.app",
+  messagingSenderId: "457535470987",
+  appId: "1:457535470987:web:c94320eb296696e132838e"
+};
+    if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+    // 匿名登入（方便多裝置同步；需 Firestore 規則允許）
+    try { firebase.auth().signInAnonymously(); } catch(e){ console.warn(e); }
+    const db = firebase.firestore();
+    // 使用者/裝置識別（可自行設定固定 ID）
+    const PROFILE_ID = localStorage.getItem("profileId") || "default";
+  </script>
+
+  <script>
+    // === 進階：Firestore 多裝置同步（bonus.html） ===
+    function ymKey(d = new Date()){
+      return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+    }
+
+    // 寫入一筆紀錄到雲端
+    async function fsAddRecord(rec){
+      try{
+        const ym = ymKey(new Date(rec.date));
+        await db.collection("profiles").doc(PROFILE_ID)
+          .collection("months").doc(ym)
+          .collection("records").add({ ...rec, createdAt: Date.now() });
+      }catch(err){ console.warn("fsAddRecord:", err); }
+    }
+
+    // 刪除雲端最新一筆（依 createdAt DESC）
+    async function fsDeleteLastRecord(){
+      try{
+        const ym = ymKey();
+        const q = await db.collection("profiles").doc(PROFILE_ID)
+          .collection("months").doc(ym)
+          .collection("records").orderBy("createdAt", "desc").limit(1).get();
+        if (!q.empty){
+          await q.docs[0].ref.delete();
+        } else {
+          alert("雲端目前沒有可刪除紀錄");
+        }
+      }catch(err){ console.warn("fsDeleteLastRecord:", err); }
+    }
+
+    // 監聽當月資料並即時更新 UI（跨裝置同步）
+    function listenMonthRealtime(){
+      const ym = ymKey();
+      return db.collection("profiles").doc(PROFILE_ID)
+        .collection("months").doc(ym)
+        .collection("records").orderBy("createdAt", "asc")
+        .onSnapshot(snap => {
+          const arr = [];
+          snap.forEach(doc => arr.push(doc.data()));
+          // 更新 localStorage（做離線備援）
+          localStorage.setItem("monthlyBonus", JSON.stringify(arr));
+          // 更新畫面
+          try {
+            // 呼叫既有的 UI 更新函式
+            if (typeof updateTotal === "function") updateTotal();
+            if (typeof showHistory === "function") showHistory();
+          } catch(e){ console.warn(e); }
+        }, err => console.warn("listenMonthRealtime:", err));
+    }
+
+    // 換月處理：不需要搬移雲端資料，因為每月存不同 doc 路徑；清空本地 current 陣列即可
+    function handleMonthRolloverCloudAware(){
+      const nowKey = ymKey();
+      const last = localStorage.getItem("bonusMonth");
+      if (last && last !== nowKey){
+        // 把本地 current 移入本地 history（保持你原本的 UX）
+        const current = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+        const history = JSON.parse(localStorage.getItem("bonusHistory") || "[]");
+        history.push({ month: last, data: current });
+        localStorage.setItem("bonusHistory", JSON.stringify(history));
+        localStorage.setItem("monthlyBonus", "[]");
       }
+      localStorage.setItem("bonusMonth", nowKey);
+    }
+
+    // 注入到既有的按鈕行為：新增、刪除 都同步雲端
+    (function wireButtonsForCloud(){
+      const adders = ["btnCalc","dockCalc"];
+      adders.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const old = el.onclick || (()=>{});
+        el.onclick = async function(){
+          const before = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+          await old.call(this);
+          // 找出新加入的最後一筆（本地 monthlyBonus 尾端）並寫到雲端
+          const after = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+          if (after.length > before.length){
+            const newRec = after[after.length - 1];
+            fsAddRecord(newRec);
+          }
+        };
+      });
+      const deleters = ["btnClearOne","dockClearOne"];
+      deleters.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const old = el.onclick || (()=>{});
+        el.onclick = async function(){
+          await old.call(this);
+          fsDeleteLastRecord();
+        };
+      });
     })();
 
-        alert(\"已刪除上一筆紀錄\");
-      }
-    }
-
-    [\"btnCalc\",\"dockCalc\"].forEach(id=> document.getElementById(id).onclick = calculateBonus);
-    [\"btnExport\",\"dockExport\"].forEach(id=> document.getElementById(id).onclick = exportCSV);
-    [\"btnHome\",\"dockHome\"].forEach(id=> document.getElementById(id).onclick = ()=> location.href = \"index_rwd.html\");
-    [\"btnClearOne\",\"dockClearOne\"].forEach(id=> document.getElementById(id).onclick = clearBonus);
+    // 啟動：處理換月、啟用即時監聽
+    (function initCloudSync(){
+      handleMonthRolloverCloudAware();
+      listenMonthRealtime(); // returns unsubscribe，但這個頁面生命周期內可不特別處理
+    })();
   </script>
+
+
+  <script>
+    // ===== 修正：月份鍵一致化與更穩健的換月邏輯 =====
+    // 統一使用 YYYY-MM（兩位數月份），並在載入時自動把舊格式（YYYY-M）轉換
+    (function monthKeyPatching(){
+      function ymKeyPad(d){
+        const dt = d instanceof Date ? d : new Date(d);
+        return dt.getFullYear() + "-" + String(dt.getMonth()+1).padStart(2,"0");
+      }
+      // 把 localStorage 的 bonusMonth 舊值 "YYYY-M" 轉成 "YYYY-MM"，避免格式差異誤判跨月
+      const raw = localStorage.getItem("bonusMonth");
+      if (raw && /^\d{4}-\d{1,2}$/.test(raw)){
+        const [y,m] = raw.split("-");
+        const patched = y + "-" + String(parseInt(m,10)).padStart(2,"0");
+        localStorage.setItem("bonusMonth", patched);
+      }
+      // 如果本地 current 記錄剛輸入但被誤歸到 history，通常是因為格式不同導致的跨月誤判
+      // 我們這裡不自動搬回（避免影響你的歷史），但之後只會用 YYYY-MM，問題不會再發生
+      // 你仍可用「清除上一筆」刪除本月最後一筆；歷史月不會被刪
+    })();
+
+    // 覆寫頁面上已宣告的 ymKey 與換月函式，改為只比較數值月份，忽略格式差異
+    (function overrideMonthHelpers(){
+      window.ymKey = function(d = new Date()){
+        return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+      };
+      const _oldHandle = window.handleMonthRolloverCloudAware || window.handleMonthRollover;
+      window.handleMonthRolloverCloudAware = function(){
+        const nowKey = ymKey();
+        const last = localStorage.getItem("bonusMonth");
+        if (last){
+          // 同步補零再比較
+          const normLast = /^\d{4}-\d{1,2}$/.test(last) ? (last.split("-")[0] + "-" + String(parseInt(last.split("-")[1],10)).padStart(2,"0")) : last;
+          if (normLast !== nowKey){
+            const current = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+            const history = JSON.parse(localStorage.getItem("bonusHistory") || "[]");
+            history.push({ month: normLast, data: current });
+            localStorage.setItem("bonusHistory", JSON.stringify(history));
+            localStorage.setItem("monthlyBonus", "[]");
+          }
+        }
+        localStorage.setItem("bonusMonth", nowKey);
+      };
+    })();
+
+    // 覆寫刪除上一筆：只刪「本月」的最後一筆；歷史月份不受影響
+    (function overrideDeleteLast(){
+      const fsDeleteLastRecord = async function(){
+        try{
+          const ym = ymKey();
+          const q = await db.collection("profiles").doc(PROFILE_ID)
+            .collection("months").doc(ym)
+            .collection("records").orderBy("createdAt", "desc").limit(1).get();
+          if (!q.empty){ await q.docs[0].ref.delete(); }
+        }catch(e){ console.warn(e); }
+      };
+      const localDelete = function(){
+        const ym = ymKey();
+        const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+        if (!arr.length){ alert("本月目前沒有可刪除的紀錄"); return false; }
+        arr.pop();
+        localStorage.setItem("monthlyBonus", JSON.stringify(arr));
+        return true;
+      };
+      function bind(id){
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener("click", async (ev)=>{
+          // 攔截原本舊的 onclick（若存在也可共存）
+          ev.preventDefault();
+          if (!confirm("確定要刪除「本月份」上一筆紀錄？（不會影響歷史月份）")) return;
+          const ok = localDelete();
+          if (ok){
+            if (typeof updateTotal === "function") updateTotal();
+            if (typeof showHistory === "function") showHistory();
+            try{ await fsDeleteLastRecord(); }catch(e){ console.warn(e); }
+            alert("已刪除本月份上一筆紀錄");
+          }
+        }, { once:false });
+      }
+      ["btnClearOne","dockClearOne"].forEach(bind);
+    })();
+  </script>
+
+
+  <script>
+    // ===== 只顯示本月紀錄 + 支援逐筆刪除 =====
+    (function enhanceMonthlyViewAndDelete(){
+      const $ = (id)=> document.getElementById(id);
+      const ymKey = (d = new Date()) => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+
+      // 重新包裝 onSnapshot 讓本地 monthlyBonus 陣列帶上 _id（Firestore doc id），便於雲端逐筆刪除
+      if (typeof db !== "undefined" && db && typeof listenMonthRealtime === "function"){
+        // 解除舊監聽（若你的版本支援回傳 unsubscribe 可在 window._unsubMonthly 存取）
+        try{ if (window._unsubMonthly) { window._unsubMonthly(); } }catch(e){}
+        window._unsubMonthly = (function(){
+          const ym = ymKey();
+          return db.collection("profiles").doc(PROFILE_ID)
+            .collection("months").doc(ym)
+            .collection("records").orderBy("createdAt","asc")
+            .onSnapshot(snap => {
+              const arr = [];
+              snap.forEach(doc => {
+                const d = doc.data();
+                // 保存 Firestore doc id 供刪除使用
+                arr.push(Object.assign({_id: doc.id}, d));
+              });
+              localStorage.setItem("monthlyBonus", JSON.stringify(arr));
+              try {
+                if (typeof updateTotal === "function") updateTotal();
+                if (typeof showHistory === "function") showHistory();
+              } catch(e){ console.warn(e); }
+            }, err => console.warn("listenMonthRealtime+", err));
+        })();
+      }
+
+      // 覆寫 showHistory：只顯示本月
+      window.showHistory = function(){
+        const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+        let out = "📘 本月紀錄：\n";
+        if (!arr.length){
+          out += "（尚無）\n";
+        }else{
+          arr.forEach((r, i) => {
+            const line = `  🕒 ${r.date||""} - ${(r.name||"")} 銷售 ${(r.product||"")} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元`;
+            out += line + `  [刪除此筆 #${i+1}]\n`;
+          });
+          out += "\n（提示：點下方『刷新本月紀錄』可更新顯示）\n";
+        }
+        $("historyDisplay").innerText = out;
+
+        // 同步在文字區下方生成按鈕（無改版，僅附加）
+        const containerId = "monthlyDeleteButtons";
+        let c = document.getElementById(containerId);
+        if (!c){
+          c = document.createElement("div");
+          c.id = containerId;
+          c.style.marginTop = "8px";
+          $("historyDisplay").parentElement.appendChild(c);
+        }
+        c.innerHTML = "";
+        arr.forEach((_, i) => {
+          const btn = document.createElement("button");
+          btn.textContent = "刪除第 " + (i+1) + " 筆";
+          btn.className = "btn danger";
+          btn.style.marginRight = "8px";
+          btn.addEventListener("click", ()=> deleteMonthlyByIndex(i));
+          c.appendChild(btn);
+        });
+        const refreshBtn = document.createElement("button");
+        refreshBtn.textContent = "刷新本月紀錄";
+        refreshBtn.className = "btn";
+        refreshBtn.addEventListener("click", ()=> window.showHistory());
+        c.appendChild(refreshBtn);
+      };
+
+      async function deleteMonthlyByIndex(index){
+        const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+        if (index < 0 || index >= arr.length){ alert("索引超出範圍"); return; }
+        if (!confirm("確定要刪除此筆（僅本月）？")) return;
+
+        // 先記下欲刪除項，以便雲端刪除
+        const target = arr[index];
+
+        // 本地刪除
+        arr.splice(index, 1);
+        localStorage.setItem("monthlyBonus", JSON.stringify(arr));
+        if (typeof updateTotal === "function") updateTotal();
+        if (typeof showHistory === "function") showHistory();
+
+        // 雲端刪除（若可用）
+        try{
+          if (typeof db !== "undefined" && db){
+            const ym = ymKey();
+            if (target && target._id){
+              // 直接用 doc id 刪除
+              await db.collection("profiles").doc(PROFILE_ID)
+                .collection("months").doc(ym)
+                .collection("records").doc(target._id).delete();
+            }else if (typeof target?.createdAt === "number"){
+              // 退而求其次：以 createdAt 比對刪除
+              const q = await db.collection("profiles").doc(PROFILE_ID)
+                .collection("months").doc(ym)
+                .collection("records").where("createdAt", "==", target.createdAt).limit(1).get();
+              if (!q.empty){ await q.docs[0].ref.delete(); }
+            }else{
+              // 最後方案：抓近 50 筆，比對主要欄位後刪除第一個相符
+              const snap = await db.collection("profiles").doc(PROFILE_ID)
+                .collection("months").doc(ym)
+                .collection("records").orderBy("createdAt","desc").limit(50).get();
+              let deleted = false;
+              snap.forEach(doc => {
+                const d = doc.data();
+                if (!deleted &&
+                    d.name === target.name &&
+                    d.product === target.product &&
+                    Number(d.weight) === Number(target.weight) &&
+                    Number(d.price) === Number(target.price) &&
+                    Number(d.bonus) === Number(target.bonus) ){
+                  deleted = true;
+                  doc.ref.delete();
+                }
+              });
+            }
+          }
+        }catch(e){ console.warn("cloud delete by index failed:", e); }
+      }
+
+      // 初次渲染
+      document.addEventListener("DOMContentLoaded", ()=> {
+        try{ showHistory(); }catch(e){ console.warn(e); }
+      });
+    })();
+  </script>
+
 </body>
 </html>

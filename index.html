@@ -31,10 +31,10 @@
     @media (min-width:640px){ .grid{ grid-template-columns: repeat(2, 1fr); } }
     @media (min-width:960px){ .grid{ grid-template-columns: repeat(3, 1fr); } }
     label span{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
-    input, button{
+    input, button, a.btn{
       width:100%; padding:10px; border-radius:8px; border:1px solid var(--bd); background:#fff; color:var(--text);
     }
-    .btn{ cursor:pointer; border:1px solid var(--bd); background:#f0f0f0; }
+    .btn{ cursor:pointer; border:1px solid var(--bd); background:#f0f0f0; text-decoration:none; display:block; text-align:center; }
     .btn.primary{ background:linear-gradient(180deg, var(--brand-2), var(--brand)); border:none; color:#fff; font-weight:600; }
     .btn.ok{ background:#d4edda; border-color:#c3e6cb; color:#155724; }
     .btn.danger{ background:#f8d7da; border-color:#f5c6cb; color:#a94442; }
@@ -74,7 +74,7 @@
 
       <div class="actions">
         <button class="btn primary" id="btnCalc">計算</button>
-        <button class="btn" id="btnToBonus">前往獎金頁</button>
+        <a class="btn" id="btnToBonus" href="./bonus.html">前往獎金頁</a>
         <button class="btn ok" id="btnCopyBase">複製底價</button>
         <button class="btn danger" id="btnReset">清空</button>
       </div>
@@ -85,7 +85,7 @@
 
   <nav class="dock">
     <button class="btn primary" id="dockCalc">計算</button>
-    <button class="btn" id="dockToBonus">獎金頁</button>
+    <a class="btn" id="dockToBonus" href="./bonus.html">獎金頁</a>
     <button class="btn ok" id="dockCopyBase">複製底價</button>
     <button class="btn danger" id="dockReset">清空</button>
   </nav>
@@ -112,7 +112,19 @@
       const suggestedPrice = costPerKg / 0.75;
 
       localStorage.setItem("basePrice", basePrice.toFixed(2));
+      function updateBonusLinks(){
+        const bp = localStorage.getItem("basePrice");
+        const rounded = bp && isFinite(parseFloat(bp)) ? Math.round(parseFloat(bp)) : null;
+        ["btnToBonus","dockToBonus"].forEach(id=>{
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.href = rounded ? "./bonus.html?bp="+rounded : "./bonus.html";
+        });
+      }
+      updateBonusLinks();
 
+
+      updateBonusLinks();
       document.getElementById("results").innerHTML = `
         <p>總成本：<span class="em">${totalCost.toFixed(0)}</span> 元</p>
         <p>成品重量：<span class="em">${iceWeight.toFixed(2)}</span> 公斤</p>
@@ -138,13 +150,97 @@
     }
 
     function goBonus(){
-      location.href = "bonus.html";
+      const url = new URL("bonus.html", location.href);
+      location.assign(url.href);
     }
 
+      // 在頁面載入時也更新一次「前往獎金頁」連結，若 localStorage 已有 basePrice 就帶 ?bp
+      (function initBonusLinksOnLoad(){
+        const bp = localStorage.getItem("basePrice");
+        const rounded = bp && isFinite(parseFloat(bp)) ? Math.round(parseFloat(bp)) : null;
+        ["btnToBonus","dockToBonus"].forEach(id=>{
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.href = rounded ? "./bonus.html?bp="+rounded : "./bonus.html";
+        });
+      })();
+
+
     ["btnCalc","dockCalc"].forEach(id=> document.getElementById(id).onclick = calculate);
-    ["btnToBonus","dockToBonus"].forEach(id=> document.getElementById(id).onclick = goBonus);
+    ["btnToBonus","dockToBonus"].forEach(id=> document.getElementById(id)?.addEventListener("click", (e)=>{ /* href handles nav; JS fallback only */ }));
     ["btnCopyBase","dockCopyBase"].forEach(id=> document.getElementById(id).onclick = copyBase);
     ["btnReset","dockReset"].forEach(id=> document.getElementById(id).onclick = resetForm);
   </script>
+
+  <!-- Firebase compat CDN (no UI changes) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script>
+    // 🔧 將你的 Firebase 專案設定填在這裡，或在外部於 window.FIREBASE_CONFIG 指定
+    window.FIREBASE_CONFIG = window.FIREBASE_CONFIG || {
+  apiKey: "AIzaSyAYmv1mt2QV0Ex0J1PlASfZjA3bdBvIJws",
+  authDomain: "haishang-a09c3.firebaseapp.com",
+  projectId: "haishang-a09c3",
+  storageBucket: "haishang-a09c3.firebasestorage.app",
+  messagingSenderId: "457535470987",
+  appId: "1:457535470987:web:c94320eb296696e132838e"
+};
+    if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+    // 匿名登入（方便多裝置同步；需 Firestore 規則允許）
+    try { firebase.auth().signInAnonymously(); } catch(e){ console.warn(e); }
+    const db = firebase.firestore();
+    // 使用者/裝置識別（可自行設定固定 ID）
+    const PROFILE_ID = localStorage.getItem("profileId") || "default";
+  </script>
+
+  <script>
+    // === BasePrice Firestore 同步（index.html） ===
+    async function syncBaseToFirestore(basePrice){
+      try{
+        await db.collection("profiles").doc(PROFILE_ID)
+          .collection("settings").doc("base")
+          .set({ basePrice: Number(basePrice), updatedAt: Date.now() }, { merge:true });
+      }catch(err){ console.warn("syncBaseToFirestore:", err); }
+    }
+    async function loadBaseFromFirestore(){
+      try{
+        const snap = await db.collection("profiles").doc(PROFILE_ID)
+          .collection("settings").doc("base").get();
+        const data = snap.exists ? snap.data() : null;
+        if (data && isFinite(data.basePrice)){
+          // 寫回 localStorage 與畫面（不破壞 RWD）
+          localStorage.setItem("basePrice", String(data.basePrice));
+          const el = document.getElementById("results");
+          // 不強改 UI，只更新前往獎金頁的連結（?bp=）
+          const rounded = Math.round(data.basePrice);
+          [ "btnToBonus","dockToBonus" ].forEach(id=>{
+            const a = document.getElementById(id);
+            if (a) a.href = "./bonus.html?bp=" + rounded;
+          });
+        }
+      }catch(err){ console.warn("loadBaseFromFirestore:", err); }
+    }
+    // 載入時先抓一次雲端 basePrice
+    document.addEventListener("DOMContentLoaded", loadBaseFromFirestore);
+
+    // 攔截原本的 calculate，計算後把 basePrice 也同步到雲端
+    (function wrapCalculate(){
+      const btns = ["btnCalc","dockCalc"].map(id=> document.getElementById(id));
+      const origClick = (el)=> el && el.onclick;
+      btns.forEach(el=>{
+        if(!el) return;
+        const old = el.onclick;
+        el.onclick = function(){
+          // 先執行原本計算（會寫 localStorage.basePrice）
+          if (typeof old === "function") old.call(this);
+          // 讀 localStorage 後同步
+          const bp = parseFloat(localStorage.getItem("basePrice"));
+          if (isFinite(bp)) syncBaseToFirestore(bp);
+        };
+      });
+    })();
+  </script>
+
 </body>
 </html>
