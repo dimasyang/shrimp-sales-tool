@@ -22,17 +22,15 @@
     @media(min-width:640px){.dock{grid-template-columns:repeat(4,1fr)}}
     .table{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:12px}
     pre{white-space:pre-wrap}
-    /* toast */
     .toast-wrap{position:fixed;right:12px;bottom:12px;z-index:9999;display:grid;gap:8px;max-width:80vw}
     .toast{background:rgba(0,0,0,.82);color:#fff;padding:10px 12px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:14px}
-    /* debug */
     .dbg{position:fixed;left:12px;bottom:12px;background:rgba(255,255,255,.9);border:1px solid var(--bd);padding:8px;border-radius:10px;font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.1);z-index:9998}
   </style>
 </head>
 <body>
   <div class="container">
     <h1>💼 業務獎金計算</h1>
-    <p class="lead">底價會自動帶入（可手動覆寫）｜本月即時同步、可逐筆刪除｜歷史月份統計</p>
+    <p class="lead">底價自動帶入（可手動覆寫）｜本月即時同步、可逐筆刪除｜歷史月份統計</p>
     <section class="card">
       <p>每公斤底價（四捨五入）：<span id="basePriceDisplay" class="em">-</span> 元</p>
       <div class="grid">
@@ -53,7 +51,7 @@
       <div class="actions">
         <button class="btn primary" id="btnCalc">計算獎金</button>
         <button class="btn ok" id="btnExport">匯出 CSV</button>
-        <a class="btn" href="./index.html">返回主頁</a>
+        <a class="btn primary" href="./index.html">返回主頁</a>
         <button class="btn danger" id="btnClearOne">清除上一筆</button>
       </div>
 
@@ -78,19 +76,17 @@
   <nav class="dock">
     <button class="btn primary" id="dockCalc">計算</button>
     <button class="btn ok" id="dockExport">匯出 CSV</button>
-    <a class="btn" href="./index.html">主頁</a>
+    <a class="btn primary" href="./index.html">主頁</a>
     <button class="btn danger" id="dockClearOne">清除上一筆</button>
   </nav>
 
   <div id="toast-wrap" class="toast-wrap" hidden></div>
   <div class="dbg" id="dbgPanel">UID: —<br>Profile: default<br>本地筆數: 0</div>
 
-  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
   <script>
-    // 專案設定（sales-bonusrecord）
     window.FIREBASE_CONFIG = {
       apiKey: "AIzaSyBw4SbJMjNxoj6P9Zwi4SAlSIi30A8uAp4",
       authDomain: "sales-bonusrecord.firebaseapp.com",
@@ -107,8 +103,7 @@
     const PROFILE_ID = localStorage.getItem('profileId') || 'default';
 
     function toast(msg, ms=2200){
-      const wrap = document.getElementById('toast-wrap');
-      wrap.hidden=false;
+      const wrap = document.getElementById('toast-wrap'); wrap.hidden=false;
       const t = document.createElement('div'); t.className='toast'; t.textContent=msg; wrap.appendChild(t);
       setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .25s'; setTimeout(()=>t.remove(), 300); }, ms);
     }
@@ -180,8 +175,6 @@
       }catch(e){ console.warn(e); return false; }
     }
 
-    function showHistory(arr){ renderCurrent(arr); }
-
     function exportCSV(){
       const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
       let csv = "業務姓名,銷售品名,數量(kg),成交單價,總金額,獎金,日期\n";
@@ -205,6 +198,63 @@
         }
       }catch(e){ console.warn(e); }
       arr.splice(i,1); localStorage.setItem("monthlyBonus", JSON.stringify(arr)); renderCurrent(arr);
+    }
+
+    // ==== 手機可用的歷史月份列出（collectionGroup 版） ====
+    async function populateMonths(){
+      const sel = $("monthSelect");
+      if (!sel) return;
+      sel.innerHTML = "";
+      try{
+        const snap = await db.collectionGroup("records")
+          .orderBy("createdAt","desc")
+          .limit(200).get(); // 近 200 筆足以涵蓋近 12 個月
+        const seen = new Set(); const months = [];
+        snap.forEach(doc => {
+          const ymDoc = doc.ref.parent.parent; // .../months/{ym}
+          if (!ymDoc) return;
+          const ym = ymDoc.id;
+          if (!seen.has(ym)) { seen.add(ym); months.push(ym); }
+        });
+        if (months.length === 0){
+          const opt = document.createElement("option");
+          opt.value=""; opt.textContent="（沒有歷史月份）"; sel.appendChild(opt); return;
+        }
+        months.forEach(ym => {
+          const opt = document.createElement("option");
+          opt.value = ym; opt.textContent = ym; sel.appendChild(opt);
+        });
+      }catch(e){
+        console.warn("populateMonths (collectionGroup) failed:", e);
+        // 後備方法
+        try{
+          const snap2 = await db.collection("profiles").doc(PROFILE_ID).collection("months").orderBy("updatedAt","desc").limit(36).get();
+          if (snap2.empty){
+            const opt = document.createElement("option"); opt.value=""; opt.textContent="（沒有歷史月份）"; sel.appendChild(opt); return;
+          }
+          snap2.forEach(doc=>{
+            const d=doc.data(); const opt=document.createElement("option");
+            opt.value=d.month || doc.id; opt.textContent=d.month || doc.id; sel.appendChild(opt);
+          });
+        }catch(e2){ console.warn("fallback months failed:", e2); }
+      }
+    }
+
+    async function loadMonthAndShow(ym){
+      if (!ym) return;
+      try{
+        const snap = await db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records")
+          .orderBy("createdAt","asc").get();
+        const arr=[]; let sumT=0,sumB=0;
+        snap.forEach(doc=>{ const d=doc.data(); arr.push(d); sumT+=Number(d.total)||0; sumB+=Number(d.bonus)||0; });
+        let out=`📚 歷史紀錄：${ym}\n`;
+        if(!arr.length) out+="（該月沒有紀錄）\n";
+        else{ arr.forEach((r,i)=> out+=`  #${i+1}  🕒 ${r.date||""} - ${(r.name||"")} 銷售 ${(r.product||"")} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元\n`);
+              out+=`\n— 統計：總金額 ${Math.round(sumT)} 元｜總獎金 ${Math.round(sumB)} 元\n`; }
+        $("historyDisplay").innerText = out; $("monthlyButtons").innerHTML="";
+      }catch(e){
+        console.warn("loadMonthAndShow:", e); alert("讀取歷史月份失敗，請稍後再試");
+      }
     }
 
     function calculateBonus(){
@@ -242,33 +292,10 @@
       const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
       if (!arr.length) return alert("本月目前沒有可刪除的紀錄");
       if (!confirm("確定要刪除本月份上一筆？")) return;
-      const target = arr.pop(); localStorage.setItem("monthlyBonus", JSON.stringify(arr)); renderCurrent(arr);
+      arr.pop(); localStorage.setItem("monthlyBonus", JSON.stringify(arr)); renderCurrent(arr);
       const ym = ymKey();
       db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records")
         .orderBy("createdAt","desc").limit(1).get().then(q=>{ if(!q.empty) q.docs[0].ref.delete(); }).catch(console.warn);
-    }
-
-    async function populateMonths(){
-      const sel = $("monthSelect"); sel.innerHTML="";
-      const snap = await db.collection("profiles").doc(PROFILE_ID).collection("months").orderBy("updatedAt","desc").limit(36).get();
-      if (snap.empty){
-        const opt = document.createElement("option"); opt.value=""; opt.textContent="（沒有歷史月份）"; sel.appendChild(opt); return;
-      }
-      snap.forEach(doc=>{
-        const d = doc.data(); const opt=document.createElement("option");
-        opt.value=d.month || doc.id; opt.textContent=d.month || doc.id; sel.appendChild(opt);
-      });
-    }
-    async function loadMonthAndShow(ym){
-      if (!ym) return;
-      const snap = await db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records").orderBy("createdAt","asc").get();
-      const arr=[]; let sumT=0,sumB=0;
-      snap.forEach(doc=>{ const d=doc.data(); arr.push(d); sumT+=Number(d.total)||0; sumB+=Number(d.bonus)||0; });
-      let out=`📚 歷史紀錄：${ym}\n`;
-      if(!arr.length) out+="（該月沒有紀錄）\n";
-      else{ arr.forEach((r,i)=> out+=`  #${i+1}  🕒 ${r.date||""} - ${(r.name||"")} 銷售 ${(r.product||"")} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元\n`);
-            out+=`\n— 統計：總金額 ${Math.round(sumT)} 元｜總獎金 ${Math.round(sumB)} 元\n`; }
-      $("historyDisplay").innerText = out; $("monthlyButtons").innerHTML="";
     }
 
     // Gate: 等登入完成再啟動監聽
@@ -281,10 +308,8 @@
       (function(){ const el=$("costPerKg"); if(el && !el.value){ const v=pickBase(); if(v!==null) el.value=String(Math.round(v)); } refreshBaseDisplay(); })();
       maybeFetchBaseFromCloud();
 
-      // 若雲端空而本地有 → 先補上去
       await pushLocalIfCloudEmpty();
 
-      // 開始監聽
       const ym = ymKey();
       db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records")
         .orderBy("createdAt","asc").onSnapshot(snap=>{
@@ -296,7 +321,6 @@
       db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).set({month:ym,updatedAt:Date.now()},{merge:true});
     });
 
-    // 綁定 UI
     document.addEventListener("DOMContentLoaded", ()=>{
       ["btnCalc","dockCalc"].forEach(id=> $(id).onclick = calculateBonus);
       ["btnExport","dockExport"].forEach(id=> $(id).onclick = exportCSV);
@@ -308,7 +332,7 @@
         else{ t.dataset.view="history"; t.textContent="回到本月"; await populateMonths(); }
       });
       $("btnLoadMonth").addEventListener("click", ()=>{ const ym=$("monthSelect").value; if(ym) loadMonthAndShow(ym); });
-      // 初次渲染
+
       renderCurrent(JSON.parse(localStorage.getItem("monthlyBonus") || "[]"));
       refreshBaseDisplay();
     });

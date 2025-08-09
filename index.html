@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>🦐 蝦仁成本報價試算表</title>
   <style>
-    :root{--bg:#f5f5f5;--card:#fff;--bd:#ddd;--muted:#666;--brand:#4f8cff;--brand2:#7aa2ff;}
+    :root{--bg:#f5f5f5;--card:#fff;--bd:#ddd;--muted:#666;--brand:#4f8cff;--brand2:#7aa2ff}
     *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif;color:#222}
     .container{max-width:1000px;margin:0 auto;padding:16px 16px 100px}
-    h1{margin:0 0 8px} .lead{color:var(--muted);margin:0 0 16px}
+    h1{margin:0 0 8px}.lead{color:var(--muted);margin:0 0 16px}
     .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px}
     .grid{display:grid;gap:12px;grid-template-columns:1fr} @media(min-width:640px){.grid{grid-template-columns:repeat(2,1fr)}}
     label span{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
@@ -22,7 +22,6 @@
     .result .em{color:#b00020;font-weight:700}
     .dock{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.9);backdrop-filter:blur(6px);border-top:1px solid var(--bd);padding:10px;display:grid;gap:10px;grid-template-columns:1fr 1fr} 
     @media(min-width:640px){.dock{grid-template-columns:repeat(4,1fr)}}
-    /* toast */
     .toast-wrap{position:fixed;right:12px;bottom:12px;z-index:9999;display:grid;gap:8px;max-width:80vw}
     .toast{background:rgba(0,0,0,.82);color:#fff;padding:10px 12px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:14px}
   </style>
@@ -45,7 +44,7 @@
       </div>
       <div class="actions">
         <button class="btn primary" id="btnCalc">計算</button>
-        <a class="btn" id="btnToBonus" href="./bonus.html">前往獎金頁</a>
+        <a class="btn primary" id="btnToBonus" href="./bonus.html">前往獎金頁</a>
         <button class="btn ok" id="btnCopyBase">複製底價</button>
         <button class="btn danger" id="btnReset">清空</button>
       </div>
@@ -54,19 +53,17 @@
   </div>
   <nav class="dock">
     <button class="btn primary" id="dockCalc">計算</button>
-    <a class="btn" id="dockToBonus" href="./bonus.html">獎金頁</a>
+    <a class="btn primary" id="dockToBonus" href="./bonus.html">獎金頁</a>
     <button class="btn ok" id="dockCopyBase">複製底價</button>
     <button class="btn danger" id="dockReset">清空</button>
   </nav>
 
   <div id="toast-wrap" class="toast-wrap" hidden></div>
 
-  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
   <script>
-    // 專案設定（sales-bonusrecord）
     window.FIREBASE_CONFIG = {
       apiKey: "AIzaSyBw4SbJMjNxoj6P9Zwi4SAlSIi30A8uAp4",
       authDomain: "sales-bonusrecord.firebaseapp.com",
@@ -83,10 +80,8 @@
     const PROFILE_ID = localStorage.getItem('profileId') || 'default';
 
     function toast(msg, ms=2200){
-      const wrap = document.getElementById('toast-wrap');
-      wrap.hidden=false;
-      const t = document.createElement('div');
-      t.className='toast'; t.textContent=msg; wrap.appendChild(t);
+      const wrap = document.getElementById('toast-wrap'); wrap.hidden=false;
+      const t = document.createElement('div'); t.className='toast'; t.textContent=msg; wrap.appendChild(t);
       setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .25s'; setTimeout(()=>t.remove(), 300); }, ms);
     }
 
@@ -111,13 +106,10 @@
       const suggestedPrice = costPerKg / 0.75;
 
       localStorage.setItem("basePrice", basePrice.toFixed(2));
-      // 同步到 Firestore（settings/base）
       db.collection("profiles").doc(PROFILE_ID).collection("settings").doc("base")
         .set({ basePrice: Number(basePrice.toFixed(2)), updatedAt: Date.now() }, { merge:true })
-        .then(()=> toast("已同步底價到雲端"))
-        .catch(console.warn);
+        .then(()=> toast("已同步底價到雲端")).catch(console.warn);
 
-      // 更新「前往獎金頁」連結帶 ?bp=
       const rounded = Math.round(basePrice);
       ["btnToBonus","dockToBonus"].forEach(id=>{
         const a=document.getElementById(id); if(a) a.href="./bonus.html?bp="+rounded;
@@ -146,7 +138,6 @@
       localStorage.removeItem("basePrice");
     }
 
-    // 載入時補上連結的 ?bp
     document.addEventListener("DOMContentLoaded", async ()=>{
       try{
         let bp = localStorage.getItem("basePrice");
