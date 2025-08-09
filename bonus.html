@@ -100,7 +100,7 @@
     const db = firebase.firestore();
     try { db.enablePersistence({synchronizeTabs:true}); } catch(e){ console.warn(e); }
     firebase.auth().signInAnonymously().catch(console.warn);
-    const PROFILE_ID = localStorage.getItem('profileId') || 'default';
+    const PROFILE_ID = "default"; // 固定為 default
 
     function toast(msg, ms=2200){
       const wrap = document.getElementById('toast-wrap'); wrap.hidden=false;
@@ -200,6 +200,17 @@
       arr.splice(i,1); localStorage.setItem("monthlyBonus", JSON.stringify(arr)); renderCurrent(arr);
     }
 
+    // === 手機穩定：先拉一次，再監聽 ===
+    async function initialPull(){
+      const ym = ymKey();
+      const snap = await db.collection("profiles").doc(PROFILE_ID)
+        .collection("months").doc(ym).collection("records")
+        .orderBy("createdAt","asc").get();
+      const arr=[]; snap.forEach(doc=> arr.push(Object.assign({_id:doc.id}, doc.data())));
+      localStorage.setItem("monthlyBonus", JSON.stringify(arr));
+      renderCurrent(arr);
+    }
+
     // ==== 手機可用的歷史月份列出（collectionGroup 版） ====
     async function populateMonths(){
       const sel = $("monthSelect");
@@ -208,10 +219,10 @@
       try{
         const snap = await db.collectionGroup("records")
           .orderBy("createdAt","desc")
-          .limit(200).get(); // 近 200 筆足以涵蓋近 12 個月
+          .limit(200).get();
         const seen = new Set(); const months = [];
         snap.forEach(doc => {
-          const ymDoc = doc.ref.parent.parent; // .../months/{ym}
+          const ymDoc = doc.ref.parent.parent;
           if (!ymDoc) return;
           const ym = ymDoc.id;
           if (!seen.has(ym)) { seen.add(ym); months.push(ym); }
@@ -226,7 +237,6 @@
         });
       }catch(e){
         console.warn("populateMonths (collectionGroup) failed:", e);
-        // 後備方法
         try{
           const snap2 = await db.collection("profiles").doc(PROFILE_ID).collection("months").orderBy("updatedAt","desc").limit(36).get();
           if (snap2.empty){
@@ -266,7 +276,7 @@
       const deduct = $("homeDelivery").checked ? 250 : 0;
       const addSelf = $("selfDelivery").checked ? weight * 3 : 0;
       const deductDriver = $("companyDriver").checked ? weight * 3 : 0;
-      const addKHH = $("kaohsiungLocal").checked ? 5 : 0; // 整筆 +5
+      const addKHH = $("kaohsiungLocal").checked ? 5 : 0;
       const diff = actual - cost;
       const bonus = diff > 0 ? diff * weight - deduct - deductDriver + addSelf + addKHH : 0;
       $("bonusResult").innerText = String(Math.round(bonus));
@@ -298,17 +308,16 @@
         .orderBy("createdAt","desc").limit(1).get().then(q=>{ if(!q.empty) q.docs[0].ref.delete(); }).catch(console.warn);
     }
 
-    // Gate: 等登入完成再啟動監聽
     firebase.auth().onAuthStateChanged(async u=>{
-      $("dbgPanel").innerHTML = `UID: ${u?u.uid:"（未登入）"}<br>Profile: ${localStorage.getItem('profileId')||'default'}<br>本地筆數: ${(JSON.parse(localStorage.getItem('monthlyBonus')||'[]').length)}`;
+      $("dbgPanel").innerHTML = `UID: ${u?u.uid:"（未登入）"}<br>Profile: default<br>本地筆數: ${(JSON.parse(localStorage.getItem('monthlyBonus')||'[]').length)}`;
       if(!u || window._startedRealtimeOnce) return;
       window._startedRealtimeOnce = true;
 
-      // 先用本地渲染 + 補 base
       (function(){ const el=$("costPerKg"); if(el && !el.value){ const v=pickBase(); if(v!==null) el.value=String(Math.round(v)); } refreshBaseDisplay(); })();
       maybeFetchBaseFromCloud();
 
       await pushLocalIfCloudEmpty();
+      await initialPull(); // 先拉一次，手機立即有資料
 
       const ym = ymKey();
       db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records")
