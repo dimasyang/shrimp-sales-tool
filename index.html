@@ -3,70 +3,34 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>蝦仁成本報價試算表（RWD 淺色版）</title>
+  <title>🦐 蝦仁成本報價試算表</title>
   <style>
-    :root{
-      --bg:#f5f5f5;
-      --card:#ffffff;
-      --muted:#555;
-      --text:#222;
-      --brand:#4f8cff;
-      --brand-2:#7aa2ff;
-      --danger:#d9534f;
-      --ok:#32d296;
-      --bd:#ccc;
-      --radius:12px;
-    }
-    *,*::before,*::after{ box-sizing:border-box; }
-    html,body{ height:100%; margin:0; }
-    body{
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
-      background:var(--bg); color:var(--text);
-    }
-    .container{ max-width:1000px; margin:0 auto; padding: max(env(safe-area-inset-top), 16px) 16px calc(88px + env(safe-area-inset-bottom)); }
-    h1{ font-size: clamp(20px, 3.5vw, 28px); margin:0 0 12px; }
-    p.lead{ color:var(--muted); margin:0 0 18px; }
-    .card{ background:var(--card); border:1px solid var(--bd); border-radius:var(--radius); padding:16px; }
-    .grid{ display:grid; gap:12px; grid-template-columns: 1fr; }
-    @media (min-width:640px){ .grid{ grid-template-columns: repeat(2, 1fr); } }
-    @media (min-width:960px){ .grid{ grid-template-columns: repeat(3, 1fr); } }
-    label span{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
-    input, button, a.btn{
-      width:100%; padding:10px; border-radius:8px; border:1px solid var(--bd); background:#fff; color:var(--text);
-    }
-    .btn{ cursor:pointer; border:1px solid var(--bd); background:#f0f0f0; text-decoration:none; display:block; text-align:center; }
-    .btn.primary{ background:linear-gradient(180deg, var(--brand-2), var(--brand)); border:none; color:#fff; font-weight:600; }
-    .btn.ok{ background:#d4edda; border-color:#c3e6cb; color:#155724; }
-    .btn.danger{ background:#f8d7da; border-color:#f5c6cb; color:#a94442; }
-    .actions{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px; }
-    @media (min-width:640px){ .actions{ grid-template-columns: repeat(4, 1fr); } }
-    .result{ margin-top:10px; background:#fff; border:1px solid var(--bd); border-radius:8px; padding:12px; }
-    .result p{ margin:6px 0; }
-    .result .em{ color:#b00020; font-weight:700; }
-    .dock{
-      position:fixed; left:0; right:0; bottom:0; backdrop-filter: blur(6px);
-      background: rgba(255,255,255,0.9); border-top:1px solid var(--bd);
-      padding:10px 12px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;
-    }
-    @media (min-width:640px){ .dock{ grid-template-columns: repeat(4, 1fr); } }
-  </style>
-
-  <style>
+    :root{--bg:#f5f5f5;--card:#fff;--bd:#ddd;--muted:#666;--brand:#4f8cff;--brand2:#7aa2ff;}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif;color:#222}
+    .container{max-width:1000px;margin:0 auto;padding:16px 16px 100px}
+    h1{margin:0 0 8px} .lead{color:var(--muted);margin:0 0 16px}
+    .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px}
+    .grid{display:grid;gap:12px;grid-template-columns:1fr} @media(min-width:640px){.grid{grid-template-columns:repeat(2,1fr)}}
+    label span{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input,button,a.btn{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:#fff}
+    .btn{cursor:pointer;background:#f3f4f6;text-align:center;text-decoration:none}
+    .btn.primary{background:linear-gradient(180deg,var(--brand2),var(--brand));color:#fff;border:none;font-weight:600}
+    .btn.ok{background:#e8f7ee;border-color:#c6f1d8;color:#146c43}
+    .btn.danger{background:#fde2e2;border-color:#f5c2c7;color:#842029}
+    .actions{display:grid;gap:10px;grid-template-columns:1fr 1fr} @media(min-width:640px){.actions{grid-template-columns:repeat(4,1fr)}}
+    .result{margin-top:10px;background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px}
+    .result .em{color:#b00020;font-weight:700}
+    .dock{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.9);backdrop-filter:blur(6px);border-top:1px solid var(--bd);padding:10px;display:grid;gap:10px;grid-template-columns:1fr 1fr} 
+    @media(min-width:640px){.dock{grid-template-columns:repeat(4,1fr)}}
+    /* toast */
     .toast-wrap{position:fixed;right:12px;bottom:12px;z-index:9999;display:grid;gap:8px;max-width:80vw}
-    .toast{background:rgba(0,0,0,.8);color:#fff;padding:10px 12px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:14px}
-    @media (prefers-color-scheme: light){
-      .toast{background:rgba(50,50,50,.9)}
-    }
+    .toast{background:rgba(0,0,0,.82);color:#fff;padding:10px 12px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:14px}
   </style>
-
 </head>
 <body>
   <div class="container">
-    <header>
-      <h1>🦐 蝦仁成本報價試算表</h1>
-      <p class="lead">手機友善｜自動計算成本、底價（存 localStorage 給獎金頁用）</p>
-    </header>
-
+    <h1>🦐 蝦仁成本報價試算表</h1>
+    <p class="lead">手機友善｜計算成本與底價（存到 Firestore，獎金頁會自動帶入）</p>
     <section class="card">
       <div class="grid">
         <label><span>原料重量 (kg)</span><input type="number" id="rawWeight" value="16" /></label>
@@ -76,22 +40,18 @@
         <label><input type="checkbox" id="cut" /> 是否割背（每公斤 +13 元）</label>
         <label style="grid-column:1 / -1;">
           <input type="radio" name="foamType" id="outsourceFoam" checked /> 委外發泡（每公斤 +15 元）
-          &nbsp; &nbsp;
-          <input type="radio" name="foamType" id="selfFoam" /> 自行發泡（每公斤 +12 元）
+          &nbsp; <input type="radio" name="foamType" id="selfFoam" /> 自行發泡（每公斤 +12 元）
         </label>
       </div>
-
       <div class="actions">
         <button class="btn primary" id="btnCalc">計算</button>
         <a class="btn" id="btnToBonus" href="./bonus.html">前往獎金頁</a>
         <button class="btn ok" id="btnCopyBase">複製底價</button>
         <button class="btn danger" id="btnReset">清空</button>
       </div>
-
       <div id="results" class="result" aria-live="polite"></div>
     </section>
   </div>
-
   <nav class="dock">
     <button class="btn primary" id="dockCalc">計算</button>
     <a class="btn" id="dockToBonus" href="./bonus.html">獎金頁</a>
@@ -99,7 +59,37 @@
     <button class="btn danger" id="dockReset">清空</button>
   </nav>
 
+  <div id="toast-wrap" class="toast-wrap" hidden></div>
+
+  <!-- Firebase compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
   <script>
+    // 專案設定（sales-bonusrecord）
+    window.FIREBASE_CONFIG = {
+      apiKey: "AIzaSyBw4SbJMjNxoj6P9Zwi4SAlSIi30A8uAp4",
+      authDomain: "sales-bonusrecord.firebaseapp.com",
+      projectId: "sales-bonusrecord",
+      storageBucket: "sales-bonusrecord.firebasestorage.app",
+      messagingSenderId: "679798751240",
+      appId: "1:679798751240:web:0ed7b227af33e0122fd1bd",
+      measurementId: "G-WFSZG479WS"
+    };
+    if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+    const db = firebase.firestore();
+    try { db.enablePersistence({synchronizeTabs:true}); } catch(e){ console.warn(e); }
+    firebase.auth().signInAnonymously().catch(console.warn);
+    const PROFILE_ID = localStorage.getItem('profileId') || 'default';
+
+    function toast(msg, ms=2200){
+      const wrap = document.getElementById('toast-wrap');
+      wrap.hidden=false;
+      const t = document.createElement('div');
+      t.className='toast'; t.textContent=msg; wrap.appendChild(t);
+      setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .25s'; setTimeout(()=>t.remove(), 300); }, ms);
+    }
+
     function calculate() {
       const rawWeight = parseFloat(document.getElementById("rawWeight").value || 0);
       const rawPrice = parseFloat(document.getElementById("rawPrice").value || 0);
@@ -121,19 +111,18 @@
       const suggestedPrice = costPerKg / 0.75;
 
       localStorage.setItem("basePrice", basePrice.toFixed(2));
-      function updateBonusLinks(){
-        const bp = localStorage.getItem("basePrice");
-        const rounded = bp && isFinite(parseFloat(bp)) ? Math.round(parseFloat(bp)) : null;
-        ["btnToBonus","dockToBonus"].forEach(id=>{
-          const el = document.getElementById(id);
-          if (!el) return;
-          el.href = rounded ? "./bonus.html?bp="+rounded : "./bonus.html";
-        });
-      }
-      updateBonusLinks();
+      // 同步到 Firestore（settings/base）
+      db.collection("profiles").doc(PROFILE_ID).collection("settings").doc("base")
+        .set({ basePrice: Number(basePrice.toFixed(2)), updatedAt: Date.now() }, { merge:true })
+        .then(()=> toast("已同步底價到雲端"))
+        .catch(console.warn);
 
+      // 更新「前往獎金頁」連結帶 ?bp=
+      const rounded = Math.round(basePrice);
+      ["btnToBonus","dockToBonus"].forEach(id=>{
+        const a=document.getElementById(id); if(a) a.href="./bonus.html?bp="+rounded;
+      });
 
-      updateBonusLinks();
       document.getElementById("results").innerHTML = `
         <p>總成本：<span class="em">${totalCost.toFixed(0)}</span> 元</p>
         <p>成品重量：<span class="em">${iceWeight.toFixed(2)}</span> 公斤</p>
@@ -146,9 +135,8 @@
     function copyBase(){
       const bp = document.getElementById("basePriceText")?.innerText || localStorage.getItem("basePrice") || "";
       if(!bp){ alert("請先計算一次底價"); return; }
-      navigator.clipboard.writeText(bp).then(()=> alert("已複製底價："+bp));
+      navigator.clipboard.writeText(bp).then(()=> toast("已複製底價："+bp));
     }
-
     function resetForm(){
       ["rawWeight","rawPrice","foamRate","iceRate"].forEach(id => document.getElementById(id).value = "");
       document.getElementById("cut").checked = false;
@@ -158,151 +146,29 @@
       localStorage.removeItem("basePrice");
     }
 
-    function goBonus(){
-      const url = new URL("bonus.html", location.href);
-      location.assign(url.href);
-    }
-
-      // 在頁面載入時也更新一次「前往獎金頁」連結，若 localStorage 已有 basePrice 就帶 ?bp
-      (function initBonusLinksOnLoad(){
-        const bp = localStorage.getItem("basePrice");
-        const rounded = bp && isFinite(parseFloat(bp)) ? Math.round(parseFloat(bp)) : null;
+    // 載入時補上連結的 ?bp
+    document.addEventListener("DOMContentLoaded", async ()=>{
+      try{
+        let bp = localStorage.getItem("basePrice");
+        if (!bp || isNaN(parseFloat(bp))) {
+          const snap = await db.collection("profiles").doc(PROFILE_ID).collection("settings").doc("base").get();
+          const data = snap.exists ? snap.data() : null;
+          if (data && isFinite(data.basePrice)) {
+            bp = String(data.basePrice);
+            localStorage.setItem("basePrice", bp);
+            toast("已從雲端載入底價：" + Math.round(parseFloat(bp)) + " 元");
+          }
+        }
+        const rounded = bp && !isNaN(parseFloat(bp)) ? Math.round(parseFloat(bp)) : null;
         ["btnToBonus","dockToBonus"].forEach(id=>{
-          const el = document.getElementById(id);
-          if (!el) return;
-          el.href = rounded ? "./bonus.html?bp="+rounded : "./bonus.html";
+          const el=document.getElementById(id); if(el) el.href = rounded ? "./bonus.html?bp="+rounded : "./bonus.html";
         });
-      })();
-
+      }catch(e){ console.warn(e); }
+    });
 
     ["btnCalc","dockCalc"].forEach(id=> document.getElementById(id).onclick = calculate);
-    ["btnToBonus","dockToBonus"].forEach(id=> document.getElementById(id)?.addEventListener("click", (e)=>{ /* href handles nav; JS fallback only */ }));
     ["btnCopyBase","dockCopyBase"].forEach(id=> document.getElementById(id).onclick = copyBase);
     ["btnReset","dockReset"].forEach(id=> document.getElementById(id).onclick = resetForm);
   </script>
-
-  <!-- Firebase compat CDN (no UI changes) -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
-  <script>
-    // 🔧 將你的 Firebase 專案設定填在這裡，或在外部於 window.FIREBASE_CONFIG 指定
-    window.FIREBASE_CONFIG = window.FIREBASE_CONFIG || {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
-    };
-    if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
-    // 匿名登入（方便多裝置同步；需 Firestore 規則允許）
-    try { firebase.auth().signInAnonymously(); } catch(e){ console.warn(e); }
-    const db = firebase.firestore();
-    // 使用者/裝置識別（可自行設定固定 ID）
-    const PROFILE_ID = localStorage.getItem("profileId") || "default";
-  </script>
-
-  <script>
-    // === BasePrice Firestore 同步（index.html） ===
-    async function syncBaseToFirestore(basePrice){
-      try{
-        await db.collection("profiles").doc(PROFILE_ID)
-          .collection("settings").doc("base")
-          .set({ basePrice: Number(basePrice), updatedAt: Date.now() }, { merge:true });
-      }catch(err){ console.warn("syncBaseToFirestore:", err); }
-    }
-    async function loadBaseFromFirestore(){
-      try{
-        const snap = await db.collection("profiles").doc(PROFILE_ID)
-          .collection("settings").doc("base").get();
-        const data = snap.exists ? snap.data() : null;
-        if (data && isFinite(data.basePrice)){
-          // 寫回 localStorage 與畫面（不破壞 RWD）
-          localStorage.setItem("basePrice", String(data.basePrice));
-          const el = document.getElementById("results");
-          // 不強改 UI，只更新前往獎金頁的連結（?bp=）
-          const rounded = Math.round(data.basePrice);
-          [ "btnToBonus","dockToBonus" ].forEach(id=>{
-            const a = document.getElementById(id);
-            if (a) a.href = "./bonus.html?bp=" + rounded;
-          });
-        }
-      }catch(err){ console.warn("loadBaseFromFirestore:", err); }
-    }
-    // 載入時先抓一次雲端 basePrice
-    document.addEventListener("DOMContentLoaded", loadBaseFromFirestore);
-
-    // 攔截原本的 calculate，計算後把 basePrice 也同步到雲端
-    (function wrapCalculate(){
-      const btns = ["btnCalc","dockCalc"].map(id=> document.getElementById(id));
-      const origClick = (el)=> el && el.onclick;
-      btns.forEach(el=>{
-        if(!el) return;
-        const old = el.onclick;
-        el.onclick = function(){
-          // 先執行原本計算（會寫 localStorage.basePrice）
-          if (typeof old === "function") old.call(this);
-          // 讀 localStorage 後同步
-          const bp = parseFloat(localStorage.getItem("basePrice"));
-          if (isFinite(bp)) syncBaseToFirestore(bp);
-        };
-      });
-    })();
-  </script>
-
-
-  <script>
-    (function initToast(){
-      if (document.getElementById('toast-wrap')) return;
-      const w = document.createElement('div');
-      w.id = 'toast-wrap'; w.className = 'toast-wrap';
-      document.body.appendChild(w);
-      window.showToast = function(msg, ms=2200){
-        try{
-          const item = document.createElement('div');
-          item.className = 'toast';
-          item.textContent = msg;
-          w.appendChild(item);
-          setTimeout(()=>{
-            item.style.opacity = '0';
-            item.style.transition = 'opacity .25s ease';
-            setTimeout(()=> item.remove(), 300);
-          }, ms);
-        }catch(e){ console.warn(e); }
-      };
-    })();
-  </script>
-
-
-  <script>
-    (function hookIndexToasts(){
-      // Base loaded toast already inside loadBaseFromFirestoreToLinks if we add it:
-      const oldLoad = window.loadBaseFromFirestoreToLinks;
-      window.loadBaseFromFirestoreToLinks = async function(){
-        const before = localStorage.getItem("basePrice");
-        try{
-          await oldLoad();
-        }catch(e){ console.warn(e); }
-        const after = localStorage.getItem("basePrice");
-        if ((!before || before !== after) && after){
-          try{ showToast("已從雲端載入底價：" + Math.round(parseFloat(after)) + " 元"); }catch(e){}
-        }
-      };
-
-      // Hook calculate buttons to show sync toast
-      ["btnCalc","dockCalc"].forEach(id=>{
-        const el = document.getElementById(id);
-        if (!el) return;
-        const old = el.onclick;
-        el.onclick = function(){
-          if (typeof old === "function") old.call(this);
-          const bp = parseFloat(localStorage.getItem("basePrice"));
-          if (isFinite(bp)) try{ showToast("已同步底價到雲端"); }catch(e){}
-        };
-      });
-    })();
-  </script>
-
 </body>
 </html>
