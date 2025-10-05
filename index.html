@@ -12,13 +12,14 @@
     .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px}
     .grid{display:grid;gap:12px;grid-template-columns:1fr} @media(min-width:640px){.grid{grid-template-columns:repeat(2,1fr)}}
     label span{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
-    input,button,a.btn{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:#fff}
+    input:not([type=checkbox]):not([type=radio]),button,a.btn{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:#fff}
     .btn{cursor:pointer;background:#f3f4f6;text-align:center;text-decoration:none}
     .btn.primary{background:linear-gradient(180deg,var(--brand2),var(--brand));color:#fff;border:none;font-weight:600}
     .btn.ok{background:#e8f7ee;border-color:#c6f1d8;color:#146c43}
     .btn.danger{background:#fde2e2;border-color:#f5c2c7;color:#842029}
     .actions{display:grid;gap:10px;grid-template-columns:1fr 1fr} @media(min-width:640px){.actions{grid-template-columns:repeat(4,1fr)}}
     .result{margin-top:10px;background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px}
+    input[type=checkbox],input[type=radio]{width:auto;display:inline-block;vertical-align:middle;margin-right:6px}
     .result .em{color:#b00020;font-weight:700}
     .dock{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.9);backdrop-filter:blur(6px);border-top:1px solid var(--bd);padding:10px;display:grid;gap:10px;grid-template-columns:1fr 1fr} 
     @media(min-width:640px){.dock{grid-template-columns:repeat(4,1fr)}}
@@ -41,6 +42,7 @@
           <input type="radio" name="foamType" id="outsourceFoam" checked /> 委外發泡（每公斤 +15 元）
           &nbsp; <input type="radio" name="foamType" id="selfFoam" /> 自行發泡（每公斤 +12 元）
         </label>
+      <label><input type="checkbox" id="packToggle" /> 蝦餅代工（每塊600g＋13元）</label>
       </div>
       <div class="actions">
         <button class="btn primary" id="btnCalc">計算</button>
@@ -79,6 +81,15 @@
     firebase.auth().signInAnonymously().catch(console.warn);
     const PROFILE_ID = "default";
 
+    // Minimal flag: enable shrimp cake packing surcharge via ?pack=1
+    (function(){
+      try {
+        var u = new URL(window.location.href);
+        window.__PACK_CAKE_ENABLED__ = (u.searchParams.get('pack') === '1');
+      } catch(e){ window.__PACK_CAKE_ENABLED__ = false; }
+    })();
+    
+
     function toast(msg, ms=2200){
       const wrap = document.getElementById('toast-wrap'); wrap.hidden=false;
       const t = document.createElement('div'); t.className='toast'; t.textContent=msg; wrap.appendChild(t);
@@ -95,12 +106,17 @@
 
       const cutCost = cut ? rawWeight * 13 : 0;
       const foamWeight = rawWeight * (1 + foamRate);
-      const foamCost = isOutsource ? foamWeight * 15 : foamWeight * 12;
       const iceWeight = foamWeight / (1 - iceRate);
-      const iceCost = iceWeight * 18;
+      // Foam cost: outsource uses post-ice weight, self uses post-foam weight
+      const foamCost = isOutsource ? (iceWeight * 15) : (foamWeight * 12);
+      // Shrimp cake packing surcharge: +13 per 600g piece, pieces based on foamWeight
+      const __packEnabled = (typeof window.__PACK_CAKE_ENABLED__ !== 'undefined') ? !!window.__PACK_CAKE_ENABLED__ : false;
+      const __pieces = (foamWeight / 0.6);
+      const packCakeCost = __packEnabled ? (__pieces * 13) : 0;
+      const iceCost = (iceRate > 0 ? (iceWeight * 18) : 0);
       const rawCost = rawWeight * rawPrice;
 
-      const totalCost = rawCost + cutCost + foamCost + iceCost;
+      const totalCost = rawCost + cutCost + foamCost + iceCost + packCakeCost;
       const costPerKg = iceWeight > 0 ? (totalCost / iceWeight) : 0;
       const basePrice = costPerKg / 0.85;
       const suggestedPrice = costPerKg / 0.75;
@@ -161,5 +177,20 @@
     ["btnCopyBase","dockCopyBase"].forEach(id=> document.getElementById(id).onclick = copyBase);
     ["btnReset","dockReset"].forEach(id=> document.getElementById(id).onclick = resetForm);
   </script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var t = document.getElementById('packToggle');
+  if (!t) return;
+  // Initialize from flag (including ?pack=1)
+  try { t.checked = !!window.__PACK_CAKE_ENABLED__; } catch(e){}
+  // Bind change -> flag + recalc
+  t.addEventListener('change', function(){
+    window.__PACK_CAKE_ENABLED__ = !!t.checked;
+    if (typeof calculate === 'function') { try { calculate(); } catch(e){} }
+  });
+});
+</script>
+
 </body>
 </html>
