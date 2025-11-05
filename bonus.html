@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>💼 業務獎金計算</title>
+  <title>💼 業務獎金計算（本月＋上月）</title>
   <style>
     :root{--bg:#f5f5f5;--card:#fff;--bd:#ddd;--muted:#666;--brand:#4f8cff;--brand2:#7aa2ff}
     *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif;color:#222}
@@ -25,18 +25,32 @@
     .toast-wrap{position:fixed;right:12px;bottom:12px;z-index:9999;display:grid;gap:8px;max-width:80vw}
     .toast{background:rgba(0,0,0,.82);color:#fff;padding:10px 12px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:14px}
     .dbg{position:fixed;left:12px;bottom:12px;background:rgba(255,255,255,.9);border:1px solid var(--bd);padding:8px;border-radius:10px;font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.1);z-index:9998}
-  
-    /* 讓紀錄行前的勾選格維持內聯、不被撐滿寬度，並與文字對齊 */
     label.pickline input.pickRec{ width:auto; display:inline-block; vertical-align:middle; margin:0 6px 0 6px; }
-    
-    /* 隱藏歷史月份相關控制（不變動結構） */
+
+    /* Segmented switch */
+    .seg{display:inline-grid;grid-auto-flow:column;gap:6px;background:#eef2ff;border:1px solid #c7d2fe;padding:6px;border-radius:999px}
+    .seg button{border:none;background:transparent;padding:6px 12px;border-radius:999px;cursor:pointer}
+    .seg button[aria-pressed="true"]{background:#4f46e5;color:#fff}
+
     #btnLoadMonth, #monthSelect, #btnToggleHistory, #btnBackToCurrent { display:none !important; }
-    </style>
+  </style>
 </head>
 <body>
   <div class="container">
     <h1>💼 業務獎金計算</h1>
-    <p class="lead">底價自動帶入（可手動覆寫）｜本月即時同步、可逐筆刪除｜歷史月份統計</p>
+    <p class="lead">自動載入「本月＋上月」｜底價自動帶入（可手動覆寫）｜可複製/刪除紀錄</p>
+
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:10px;">
+      <div class="seg" role="tablist" aria-label="顯示月份篩選">
+        <button id="viewPrev" role="tab" aria-pressed="false" title="只顯示上月">僅上月</button>
+        <button id="viewBoth" role="tab" aria-pressed="true" title="同時顯示本月+上月">合併</button>
+        <button id="viewCurr" role="tab" aria-pressed="false" title="只顯示本月">僅本月</button>
+      </div>
+      <div id="sumBar" style="font-weight:600;color:#374151;">
+        本月：<span id="sumCurrent">0</span> 元｜上月：<span id="sumPrev">0</span> 元
+      </div>
+    </div>
+
     <section class="card">
       <p>每公斤底價（四捨五入）：<span id="basePriceDisplay" class="em">-</span> 元</p>
       <div class="grid">
@@ -58,22 +72,16 @@
         <button class="btn primary" id="btnCalc">計算獎金</button>
         <button class="btn ok" id="btnExport">匯出 CSV</button>
         <a class="btn primary" href="./index.html">返回主頁</a>
-        <button class="btn danger" id="btnClearOne">清除上一筆</button>
+        <button class="btn danger" id="btnDelPicked">刪除選取紀錄</button>
       </div>
 
       <p class="em">本次獎金：<span id="bonusResult">0</span> 元</p>
-      <p>本月累積獎金：<span id="totalBonus">0</span></p>
 
       <div class="table">
-        <strong>紀錄</strong>
+        <strong>紀錄列表</strong>
         <pre id="historyDisplay"></pre>
-        <div id="monthlyButtons" style="margin-top:8px;"></div>
-        <div id="historyControls" style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <button class="btn" id="btnToggleHistory">顯示歷史月份</button>
-          <div>
-            <select id="monthSelect" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:8px;"></select>
-            <button class="btn" id="btnLoadMonth" style="margin-top:6px;">載入選取月份</button>
-          </div>
+        <div id="monthlyButtons" style="margin-top:8px;">
+          <button class="btn" id="btnCopyPicked">複製選取紀錄</button>
         </div>
       </div>
     </section>
@@ -83,7 +91,7 @@
     <button class="btn primary" id="dockCalc">計算</button>
     <button class="btn ok" id="dockExport">匯出 CSV</button>
     <a class="btn primary" href="./index.html">主頁</a>
-    <button class="btn danger" id="dockClearOne">清除上一筆</button>
+    <button class="btn danger" id="dockDelPicked">刪除選取紀錄</button>
   </nav>
 
   <div id="toast-wrap" class="toast-wrap" hidden></div>
@@ -93,6 +101,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
   <script>
+    // ===== Firestore base =====
     window.FIREBASE_CONFIG = {
       apiKey: "AIzaSyBw4SbJMjNxoj6P9Zwi4SAlSIi30A8uAp4",
       authDomain: "sales-bonusrecord.firebaseapp.com",
@@ -106,8 +115,9 @@
     const db = firebase.firestore();
     try { db.enablePersistence({synchronizeTabs:true}); } catch(e){ console.warn(e); }
     firebase.auth().signInAnonymously().catch(console.warn);
-    const PROFILE_ID = "default"; // 固定為 default
+    const PROFILE_ID = "default";
 
+    // ===== helper =====
     function toast(msg, ms=2200){
       const wrap = document.getElementById('toast-wrap'); wrap.hidden=false;
       const t = document.createElement('div'); t.className='toast'; t.textContent=msg; wrap.appendChild(t);
@@ -116,7 +126,14 @@
     const $ = id=>document.getElementById(id);
     const num = v=>{const n=parseFloat(v);return isFinite(n)?n:null;};
     const ymKey = (d=new Date()) => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+    const ymFromDateStr = (s)=>{
+      try{ const dt=new Date(s); if(!isNaN(dt)) return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0"); }catch(e){}
+      const m=(s||"").match(/(\d{4})[\/\-](\d{1,2})/);
+      if(m) return m[1]+"-"+String(parseInt(m[2],10)).padStart(2,"0");
+      const now=new Date(); return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+    };
 
+    // ===== base price =====
     function pickBase(){
       const fromInput = num($("costPerKg") && $("costPerKg").value);
       if (fromInput !== null) return fromInput;
@@ -148,98 +165,95 @@
       disp.innerText = v !== null ? String(Math.round(v)) : "-";
     }
 
-    function renderCurrent(arr){
-      let out = "📘 本月紀錄：";
-      if(!arr.length) out += "<br>（尚無）";
+    // ===== dedup & state =====
+    function keyOf(r){
+      // Primary: Firestore doc id; Fallback: createdAt+name+price+weight+date
+      if (r && r._id) return "id:"+r._id;
+      return "ts:"+String(r.createdAt||"")+"|"+(r.name||"")+"|"+(r.price||"")+"|"+(r.weight||"")+"|"+(r.date||"");
+    }
+    function dedup(list){
+      const seen = new Set();
+      const out = [];
+      for (const r of list||[]){
+        const k = keyOf(r);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(r);
+      }
+      return out;
+    }
+
+    window.__ALL_RECORDS__ = []; // 合併（去重）
+    window.__VIEW_MODE__ = "both"; // both | current | prev
+    window.__selSet = new Set();   // 全域索引集合
+
+    function setViewMode(mode){
+      window.__VIEW_MODE__ = mode;
+      ["viewPrev","viewBoth","viewCurr"].forEach(id => $(id).setAttribute("aria-pressed","false"));
+      if (mode === "prev") $("viewPrev").setAttribute("aria-pressed","true");
+      else if (mode === "current") $("viewCurr").setAttribute("aria-pressed","true");
+      else $("viewBoth").setAttribute("aria-pressed","true");
+      renderCurrent(window.__ALL_RECORDS__);
+    }
+
+    // ===== render =====
+    function renderCurrent(allArr){
+      const now=new Date();
+      const ymNow = ymKey(now);
+      const prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      const prevYm = ymKey(prev);
+
+      const arr = Array.isArray(allArr) ? dedup(allArr.slice()) : [];
+
+      // sums
+      const sumCurr = arr.filter(r=> ymFromDateStr(r.date)===ymNow).reduce((s,r)=> s + (Number(r.bonus)||0), 0);
+      const sumPrev = arr.filter(r=> ymFromDateStr(r.date)===prevYm).reduce((s,r)=> s + (Number(r.bonus)||0), 0);
+      $("sumCurrent").innerText = Math.round(sumCurr);
+      $("sumPrev").innerText = Math.round(sumPrev);
+
+      // filter by mode
+      let list = arr;
+      if (window.__VIEW_MODE__ === "current"){
+        list = arr.filter(r=> ymFromDateStr(r.date)===ymNow);
+      } else if (window.__VIEW_MODE__ === "prev"){
+        list = arr.filter(r=> ymFromDateStr(r.date)===prevYm);
+      }
+
+      let outTitle = "📘 ";
+      outTitle += window.__VIEW_MODE__==="both" ? "本月＋上月紀錄：" : (window.__VIEW_MODE__==="current"?"本月紀錄：":"上月紀錄：");
+
+      let out = outTitle;
+      if(!list.length) out += "<br>（尚無）";
       else {
-        out += arr.map((r,i)=>{
+        out += list.map((r,i)=>{
           const name = (r.name||"");
           const prod = (r.product||"");
           const dateOnly = (function(){
             try { const dt = new Date(r.date); if (!isNaN(dt)) return dt.toLocaleDateString(); } catch(e){}
             const s = (r.date||""); const sp = s.split(" "); return sp[0] || s;
           })();
-          const line = ` <label class="pickline"> #${i+1} <input type="checkbox" class="pickRec" data-idx="${i}"> ${dateOnly}  ${name}  ${prod} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元</label>`;
+          const gIdx = arr.findIndex(o=> keyOf(o)===keyOf(r)); // map visible -> global
+          const checked = window.__selSet.has(gIdx) ? "checked" : "";
+          const line = ` <label class="pickline"> #${i+1} <input type="checkbox" class="pickRec" data-global-idx="${gIdx}" ${checked}> ${dateOnly}  ${name}  ${prod} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元</label>`;
           return "<br>" + line;
         }).join("");
       }
       $("historyDisplay").innerHTML = out;
-      (function(){
-        try{
-          const sel = window.__selSet || new Set();
-          document.querySelectorAll('#historyDisplay input.pickRec').forEach(ch=>{
-            const idx = parseInt(ch.getAttribute('data-idx'),10);
-            ch.checked = sel.has(idx);
-            ch.addEventListener('change', ()=>{
-              if (ch.checked) sel.add(idx); else sel.delete(idx);
-              window.__selSet = sel;
-            });
-          });
-        }catch(e){ console.warn(e); }
-      })();
-      const box = $("monthlyButtons"); box.innerHTML="";
-      // 操作：複製選取 / 刪除選取
-      const btnCopy = document.createElement("button"); btnCopy.className = "btn primary"; btnCopy.style.marginRight="8px";
-      btnCopy.textContent = "複製選取紀錄";
-      btnCopy.onclick = ()=>{
-        if (!window.__selSet || window.__selSet.size===0){ alert("請先勾選要複製的紀錄"); return; }
-        const defDate = new Date().toLocaleString();
-        const inDate = prompt("複製選取的紀錄：輸入新日期（套用於所有勾選）", defDate);
-        if (inDate===null) return;
-        const dateStr = (inDate && inDate.trim()) ? inDate.trim() : defDate;
-        const all = (function(){ try { return JSON.parse(localStorage.getItem("monthlyBonus")||"[]"); } catch(e){ return []; } })();
-        const ym = ymKey();
-        const ids = Array.from(window.__selSet).sort((a,b)=>a-b);
-        ids.forEach((i,k)=>{
-          const r = all[i]; if (!r) return;
-          const rec2 = Object.assign({}, r, { date: dateStr, createdAt: Date.now()+k });
-          all.push(rec2);
-          try{ db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records").add(rec2); }catch(e){}
+
+      // bind selection
+      document.querySelectorAll('#historyDisplay input.pickRec').forEach(ch=>{
+        ch.addEventListener('change', ()=>{
+          const gIdx = parseInt(ch.getAttribute('data-global-idx'),10);
+          if (ch.checked) window.__selSet.add(gIdx); else window.__selSet.delete(gIdx);
         });
-        localStorage.setItem("monthlyBonus", JSON.stringify(all));
-        renderCurrent(all);
-        window.__selSet.clear();
-        toast("已複製 " + ids.length + " 筆（日期：" + dateStr + "）");
-      };
-      box.appendChild(btnCopy);
-
-      const btnDel = document.createElement("button"); btnDel.className = "btn danger";
-      btnDel.textContent = "刪除選取紀錄";
-      btnDel.onclick = ()=>{
-        if (!window.__selSet || window.__selSet.size===0){ alert("請先勾選要刪除的紀錄"); return; }
-        // 呼叫先前覆寫的 deleteByIndex（會偵測有選取就批次刪除）
-        deleteByIndex(0);
-      };
-      box.appendChild(btnDel);
-
-      const ymFromDateStr = (s)=>{ try{ const dt=new Date(s); if(!isNaN(dt)) return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0"); }catch(e){} const m=(s||"").match(/(\d{4})[\/\-](\d{1,2})/); if(m) return m[1]+"-"+String(parseInt(m[2],10)).padStart(2,"0"); const now=new Date(); return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");}; const now=new Date(); const ymNow = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0"); const currentSum = arr.filter(r => ymFromDateStr(r.date) === ymNow).reduce((s,r)=> s + (Number(r.bonus)||0), 0);
-
-(async ()=>{
-  // 依登打日期：本月(現在月份) + 上月
-  const ymFromDateStr = (s)=>{
-    try{ const dt=new Date(s); if(!isNaN(dt)) return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0"); }catch(e){}
-    const m=(s||"").match(/(\d{4})[\/\-](\d{1,2})/);
-    if(m) return m[1]+"-"+String(parseInt(m[2],10)).padStart(2,"0");
-    const now=new Date(); return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
-  };
-  const now=new Date();
-  const ymNow = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
-  const currentSum = (Array.isArray(arr)?arr:[]).filter(r=> ymFromDateStr(r.date)===ymNow)
-                      .reduce((s,r)=> s + (Number(r.bonus)||0), 0);
-  // 上月鍵
-  const prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
-  const prevYm = prev.getFullYear()+"-"+String(prev.getMonth()+1).padStart(2,"0");
-  const prevSum = (Array.isArray(arr)?arr:[]).filter(r=> ymFromDateStr(r.date)===prevYm)
-                     .reduce((s,r)=> s + (Number(r.bonus)||0), 0);
-  $("totalBonus").innerText = `本月：${Math.round(currentSum)} 元｜上月：${Math.round(prevSum)} 元`;
-})();
-;
-}
+      });
+    }
 
     async function pushLocalIfCloudEmpty(){
-      const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-      if (!arr.length) return false;
+      const all = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
       const ym = ymKey();
+      const arr = all.filter(r=> ymFromDateStr(r.date)===ym);
+      if (!arr.length) return false;
       try{
         const q = await db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records").limit(1).get();
         if (!q.empty) return false;
@@ -250,101 +264,44 @@
             .add(Object.assign({}, r, { createdAt: (typeof r.createdAt==='number'? r.createdAt : (t0+i)) }));
         }
         await db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).set({month:ym,updatedAt:Date.now()},{merge:true});
-        toast("雲端無資料，已從本地上傳 "+arr.length+" 筆");
+        toast("雲端無資料（本月），已從本地上傳 "+arr.length+" 筆");
         return true;
       }catch(e){ console.warn(e); return false; }
     }
 
     function exportCSV(){
-      const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+      const arr = dedup(JSON.parse(localStorage.getItem("monthlyBonus") || "[]"));
       let csv = "業務姓名,銷售品名,數量(kg),成交單價,總金額,獎金,日期\n";
       arr.forEach(r=> csv += `${r.name||""},${r.product||""},${r.weight},${r.price},${r.total},${r.bonus},${r.date}\n`);
       const blob = new Blob(["\uFEFF"+csv], {type:"text/csv;charset=utf-8;"});
       const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="業務獎金報表.csv"; a.click();
     }
 
-    async function deleteByIndex(i){
-      const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-      if (i<0 || i>=arr.length) return alert("索引超出範圍");
-      if (!confirm("確定要刪除此筆（僅本月）？")) return;
-      const target = arr[i];
-      const ym = ymKey();
-      try{
+    async function deletePicked(){
+      const all = dedup(JSON.parse(localStorage.getItem("monthlyBonus") || "[]"));
+      if (!window.__selSet || window.__selSet.size===0) return alert("請先勾選要刪除的紀錄");
+      if (!confirm("確定要刪除選取的 "+window.__selSet.size+" 筆？")) return;
+      // Build keys of selected
+      const keys = Array.from(window.__selSet).map(i=> keyOf(all[i]));
+      // Delete from Firestore by month / id / createdAt
+      for (const i of Array.from(window.__selSet).sort((a,b)=>b-a)){
+        const r = all[i]; if (!r) continue;
+        const ym = ymFromDateStr(r.date||"");
         const col = db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records");
-        if (target && target._id) await col.doc(target._id).delete();
-        else if (typeof target?.createdAt === "number"){
-          const q = await col.where("createdAt","==", target.createdAt).limit(1).get();
-          if (!q.empty) await q.docs[0].ref.delete();
-        }
-      }catch(e){ console.warn(e); }
-      arr.splice(i,1); localStorage.setItem("monthlyBonus", JSON.stringify(arr)); renderCurrent(arr);
-    }
-
-    // === 手機穩定：先拉一次，再監聽 ===
-    async function initialPull(){
-      const ym = ymKey();
-      const snap = await db.collection("profiles").doc(PROFILE_ID)
-        .collection("months").doc(ym).collection("records")
-        .orderBy("createdAt","asc").get();
-      const arr=[]; snap.forEach(doc=> arr.push(Object.assign({_id:doc.id}, doc.data())));
-      localStorage.setItem("monthlyBonus", JSON.stringify(arr));
-      renderCurrent(arr);
-    }
-
-    // ==== 手機可用的歷史月份列出（collectionGroup 版） ====
-    async function populateMonths(){
-      const sel = $("monthSelect");
-      if (!sel) return;
-      sel.innerHTML = "";
-      try{
-        const snap = await db.collectionGroup("records")
-          .orderBy("createdAt","desc")
-          .limit(200).get();
-        const seen = new Set(); const months = [];
-        snap.forEach(doc => {
-          const ymDoc = doc.ref.parent.parent;
-          if (!ymDoc) return;
-          const ym = ymDoc.id;
-          if (!seen.has(ym)) { seen.add(ym); months.push(ym); }
-        });
-        if (months.length === 0){
-          const opt = document.createElement("option");
-          opt.value=""; opt.textContent="（沒有歷史月份）"; sel.appendChild(opt); return;
-        }
-        months.forEach(ym => {
-          const opt = document.createElement("option");
-          opt.value = ym; opt.textContent = ym; sel.appendChild(opt);
-        });
-      }catch(e){
-        console.warn("populateMonths (collectionGroup) failed:", e);
         try{
-          const snap2 = await db.collection("profiles").doc(PROFILE_ID).collection("months").orderBy("updatedAt","desc").limit(36).get();
-          if (snap2.empty){
-            const opt = document.createElement("option"); opt.value=""; opt.textContent="（沒有歷史月份）"; sel.appendChild(opt); return;
+          if (r._id){ await col.doc(r._id).delete(); }
+          else if (typeof r.createdAt === "number"){
+            const q = await col.where("createdAt","==", r.createdAt).limit(1).get();
+            if (!q.empty) await q.docs[0].ref.delete();
           }
-          snap2.forEach(doc=>{
-            const d=doc.data(); const opt=document.createElement("option");
-            opt.value=d.month || doc.id; opt.textContent=d.month || doc.id; sel.appendChild(opt);
-          });
-        }catch(e2){ console.warn("fallback months failed:", e2); }
+        }catch(e){ console.warn(e); }
+        all.splice(i,1);
       }
-    }
-
-    async function loadMonthAndShow(ym){
-      if (!ym) return;
-      try{
-        const snap = await db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records")
-          .orderBy("createdAt","asc").get();
-        const arr=[]; let sumT=0,sumB=0;
-        snap.forEach(doc=>{ const d=doc.data(); arr.push(d); sumT+=Number(d.total)||0; sumB+=Number(d.bonus)||0; });
-        let out=`📚 歷史紀錄：${ym}\n`;
-        if(!arr.length) out+="（該月沒有紀錄）\n";
-        else{ arr.forEach((r,i)=> out+=`  #${i+1}  ${dateOnly} - ${(r.name||"")} 銷售 ${(r.product||"")} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元\n`);
-              out+=`\n— 統計：總金額 ${Math.round(sumT)} 元｜總獎金 ${Math.round(sumB)} 元\n`; }
-        $("historyDisplay").innerText = out; $("monthlyButtons").innerHTML="";
-      }catch(e){
-        console.warn("loadMonthAndShow:", e); alert("讀取歷史月份失敗，請稍後再試");
-      }
+      localStorage.setItem("monthlyBonus", JSON.stringify(all));
+      window.__ALL_RECORDS__ = all.slice();
+      window.__selSet.clear();
+      renderCurrent(all);
+      toast("已刪除選取紀錄");
     }
 
     function calculateBonus(){
@@ -371,84 +328,38 @@
         weight, price: actual, total: actual*weight, bonus: Math.round(bonus),
         createdAt: Date.now()
       };
-      const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-      arr.push(rec); localStorage.setItem("monthlyBonus", JSON.stringify(arr)); renderCurrent(arr);
+      const arr = dedup(JSON.parse(localStorage.getItem("monthlyBonus") || "[]"));
+      arr.push(rec); localStorage.setItem("monthlyBonus", JSON.stringify(arr));
+      window.__ALL_RECORDS__ = arr.slice();
+      renderCurrent(arr);
 
-      const ym = ymKey();
-      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records")
-        .add(rec).catch(console.warn);
-      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym)
-        .set({month:ym,updatedAt:Date.now()},{merge:true});
+      const ym = ymFromDateStr(__dateStr);
+      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records").add(rec).catch(console.warn);
+      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).set({month:ym,updatedAt:Date.now()},{merge:true});
     }
 
-    
-    function duplicateLast(){
-      try{
-        const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-        if (!arr.length){ alert("目前沒有可複製的紀錄"); return; }
-        const last = arr[arr.length - 1];
-        const defDate = new Date().toLocaleString();
-        const inDate = prompt("複製上一筆：請輸入新日期（只改日期，其餘沿用）", defDate);
-        const dateStr = (inDate && inDate.trim()) ? inDate.trim() : defDate;
-        const rec2 = Object.assign({}, last, { date: dateStr, createdAt: Date.now() });
-        arr.push(rec2);
-        localStorage.setItem("monthlyBonus", JSON.stringify(arr));
-        renderCurrent(arr);
-        const ym = ymKey();
-        db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records")
-          .add(rec2).catch(console.warn);
-        db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym)
-          .set({month:ym,updatedAt:Date.now()},{merge:true});
-        toast("已複製上一筆（只改日期）");
-      }catch(e){ console.warn(e); alert("複製失敗"); }
-    }
-    
-    
-    function duplicatePick(){
-      try{
-        let arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-        if (!arr.length){ alert("目前沒有可複製的紀錄"); return; }
-        // Step 1: optional filter
-        const q = prompt("輸入關鍵字以過濾（姓名/品名/日期，留空列出全部）：","");
-        if (q && q.trim()) {
-          const qq = q.trim().toLowerCase();
-          arr = arr.filter(r => (r.name||'').toLowerCase().includes(qq) || (r.product||'').toLowerCase().includes(qq) || (r.date||'').toLowerCase().includes(qq));
-        }
-        if (!arr.length){ alert("沒有符合的紀錄"); return; }
-        // Step 2: build up to 20 recent lines for selection (most recent first)
-        const list = arr.slice(-20).map((r,i,subset)=>{
-          const idx = subset.length - i; // descending number
-          return idx + ") [" + (r.date||"") + "] " + (r.name||"") + " / " + (r.product||"") + " | 重:" + (r.weight||"") + " 價:" + (r.price||"") + " 總:" + (r.total||"") + " 獎:" + (r.bonus||"");
-        }).reverse().join("\n");
-        const pick = prompt("請輸入要複製的編號：\n\n" + list + "\n\n（輸入上方行首的編號）", "");
-        if (!pick) return;
-        const num = parseInt(pick,10);
-        if (!num || num<1 || num>arr.length){ alert("編號不正確"); return; }
-        // Map number back to record
-        const rec = arr[arr.length - num];
-        const defDate = new Date().toLocaleString();
-        const inDate = prompt("請輸入新日期（只改日期，其餘沿用）", defDate);
-        const dateStr = (inDate && inDate.trim()) ? inDate.trim() : defDate;
-        const rec2 = Object.assign({}, rec, { date: dateStr, createdAt: Date.now() });
-        const all = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-        all.push(rec2); localStorage.setItem("monthlyBonus", JSON.stringify(all)); renderCurrent(all);
-        const ym = ymKey();
-        db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records")
-          .add(rec2).catch(console.warn);
-        db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym)
-          .set({month:ym,updatedAt:Date.now()},{merge:true});
-        toast("已複製選定歷史訂單（只改日期）");
-      }catch(e){ console.warn(e); alert("複製失敗"); }
-    }
-    
-    function clearLast(){
-      const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-      if (!arr.length) return alert("本月目前沒有可刪除的紀錄");
-      if (!confirm("確定要刪除本月份上一筆？")) return;
-      arr.pop(); localStorage.setItem("monthlyBonus", JSON.stringify(arr)); renderCurrent(arr);
-      const ym = ymKey();
-      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records")
-        .orderBy("createdAt","desc").limit(1).get().then(q=>{ if(!q.empty) q.docs[0].ref.delete(); }).catch(console.warn);
+    async function initialPull(){
+      const now = new Date();
+      const ymNow = ymKey(now);
+      const prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      const prevYm = ymKey(prev);
+
+      const arr = [];
+
+      const snapNow = await db.collection("profiles").doc(PROFILE_ID)
+        .collection("months").doc(ymNow).collection("records")
+        .orderBy("createdAt","asc").get();
+      snapNow.forEach(doc=> arr.push(Object.assign({_id:doc.id}, doc.data())));
+
+      const snapPrev = await db.collection("profiles").doc(PROFILE_ID")
+        .collection("months").doc(prevYm).collection("records")
+        .orderBy("createdAt","asc").get();
+      snapPrev.forEach(doc=> arr.push(Object.assign({_id:doc.id}, doc.data())));
+
+      const de = dedup(arr);
+      localStorage.setItem("monthlyBonus", JSON.stringify(de));
+      window.__ALL_RECORDS__ = de.slice();
+      renderCurrent(de);
     }
 
     firebase.auth().onAuthStateChanged(async u=>{
@@ -456,142 +367,97 @@
       if(!u || window._startedRealtimeOnce) return;
       window._startedRealtimeOnce = true;
 
-      (function(){ const el=$("costPerKg"); if(el && !el.value){ const v=pickBase(); if(v!==null) el.value=String(Math.round(v)); } refreshBaseDisplay();
-      // 隱藏歷史月份控制：不移除，只隱藏
       (function(){
-        var el;
-        el = document.getElementById("btnLoadMonth"); if (el) el.style.display="none";
-        el = document.getElementById("monthSelect"); if (el) el.style.display="none";
-        el = document.getElementById("btnToggleHistory"); if (el) el.style.display="none";
+        const el=$("costPerKg"); if(el && !el.value){ const v=pickBase(); if(v!==null) el.value=String(Math.round(v)); }
+        refreshBaseDisplay();
       })();
- })();
       maybeFetchBaseFromCloud();
 
       await pushLocalIfCloudEmpty();
-      await initialPull(); // 先拉一次，手機立即有資料
+      await initialPull();
 
-      const ym = ymKey();
-      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records")
+      const now = new Date();
+      const ymNow = ymKey(now);
+      const prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      const prevYm = ymKey(prev);
+
+      // 本月監聽
+      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ymNow).collection("records")
         .orderBy("createdAt","asc").onSnapshot(snap=>{
-          const arr=[]; snap.forEach(doc=> arr.push(Object.assign({_id:doc.id}, doc.data())));
-          localStorage.setItem("monthlyBonus", JSON.stringify(arr));
-          renderCurrent(arr);
-          toast("已連線雲端，即時同步啟動");
+          const all = dedup(JSON.parse(localStorage.getItem("monthlyBonus") || "[]"));
+          // 先刪除舊的本月，再加入新的本月
+          const others = all.filter(r => ymFromDateStr(r.date) !== ymNow);
+          const cur = []; snap.forEach(doc=> cur.push(Object.assign({_id:doc.id}, doc.data())));
+          const merged = dedup(others.concat(cur));
+          localStorage.setItem("monthlyBonus", JSON.stringify(merged));
+          window.__ALL_RECORDS__ = merged.slice();
+          renderCurrent(merged);
         });
-      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).set({month:ym,updatedAt:Date.now()},{merge:true});
+
+      // 上月監聽
+      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(prevYm).collection("records")
+        .orderBy("createdAt","asc").onSnapshot(snap=>{
+          const all = dedup(JSON.parse(localStorage.getItem("monthlyBonus") || "[]"));
+          const others = all.filter(r => ymFromDateStr(r.date) !== prevYm);
+          const prevArr = []; snap.forEach(doc=> prevArr.push(Object.assign({_id:doc.id}, doc.data())));
+          const merged = dedup(others.concat(prevArr));
+          localStorage.setItem("monthlyBonus", JSON.stringify(merged));
+          window.__ALL_RECORDS__ = merged.slice();
+          renderCurrent(merged);
+        });
+
+      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ymNow)
+        .set({month:ymNow,updatedAt:Date.now()},{merge:true});
     });
 
     document.addEventListener("DOMContentLoaded", ()=>{
       ["btnCalc","dockCalc"].forEach(id=> $(id).onclick = calculateBonus);
       ["btnExport","dockExport"].forEach(id=> $(id).onclick = exportCSV);
-      ["btnClearOne","dockClearOne"].forEach(id=> $(id).onclick = clearLast);
+      ["btnDelPicked","dockDelPicked"].forEach(id=> $(id).onclick = deletePicked);
       $("costPerKg")?.addEventListener("input", refreshBaseDisplay);
-      $("btnToggleHistory").addEventListener("click", async (e)=>{
-        const t=e.currentTarget;
-        if(t.dataset.view==="history"){ t.dataset.view="current"; t.textContent="顯示歷史月份"; renderCurrent(JSON.parse(localStorage.getItem("monthlyBonus")||"[]")); }
-        else{ t.dataset.view="history"; t.textContent="回到本月"; await populateMonths(); }
-      });
-      $("btnLoadMonth").addEventListener("click", ()=>{ const ym=$("monthSelect").value; if(ym) loadMonthAndShow(ym); });
 
-      renderCurrent(JSON.parse(localStorage.getItem("monthlyBonus") || "[]"));
-      refreshBaseDisplay();
+      // 切換視圖
+      $("viewPrev").addEventListener("click", ()=> setViewMode("prev"));
+      $("viewBoth").addEventListener("click", ()=> setViewMode("both"));
+      $("viewCurr").addEventListener("click", ()=> setViewMode("current"));
 
-      // 快捷鍵：Ctrl/⌘+D 复制上一筆；Ctrl/⌘+L 從清單選擇複製
-      document.addEventListener("keydown", (e)=>{
-        const k=(e.key||'').toLowerCase();
-        if ((e.ctrlKey||e.metaKey) && k==='d'){ e.preventDefault(); duplicateLast(); }
-        if ((e.ctrlKey||e.metaKey) && k==='l'){ e.preventDefault(); duplicatePick(); }
-      });
-      // 桌面：雙擊標題 -> 打開清單複製
-      const __h1 = document.querySelector('h1');
-      if (__h1){ __h1.addEventListener('click', duplicatePick); }
-    });
-  
-// === 選取 / 複製 / 刪除（不改版面） ===
-(function(){
-  window.__selSet = new Set(); // 暫存選取索引（以 0 起算）
-  function getArr(){ try { return JSON.parse(localStorage.getItem("monthlyBonus")||"[]"); } catch(e){ return []; } }
-  function saveArr(arr){ localStorage.setItem("monthlyBonus", JSON.stringify(arr)); }
-
-  function toggleSelectByClickOnPre(ev){ if (ev && ev.target && ev.target.classList && ev.target.classList.contains('pickRec')) return; 
-    const pre = document.getElementById("historyDisplay");
-    if (!pre) return;
-    const rect = pre.getBoundingClientRect();
-    const y = ev.clientY - rect.top + pre.scrollTop;
-    const lhStr = window.getComputedStyle(pre).lineHeight;
-    let lh = parseFloat(lhStr);
-    if (!isFinite(lh) || lh<=0){ lh = 20; }
-    const lineIdx = Math.floor(y / lh);
-    const headerLines = 1; // 第一行為「📘 本月紀錄：」
-    const recIdx = lineIdx - headerLines;
-    const arr = getArr();
-    if (recIdx < 0 || recIdx >= arr.length) { return; }
-    if (window.__selSet.has(recIdx)) window.__selSet.delete(recIdx);
-    else window.__selSet.add(recIdx);
-    const picked = Array.from(window.__selSet).sort((a,b)=>a-b).map(i=> "#"+(i+1)).join("、");
-    if (picked) toast("已選：" + picked); else toast("已清除選取");
-  }
-
-  document.addEventListener("DOMContentLoaded", function(){
-    const pre = document.getElementById("historyDisplay");
-    if (pre) pre.addEventListener("click", toggleSelectByClickOnPre);
-
-    const hdr = document.querySelector(".table > strong");
-    if (hdr){
-      hdr.title = "點此複製已選取的紀錄";
-      hdr.addEventListener("click", function(){
-        if (!window.__selSet || window.__selSet.size===0){ alert("請先在列表中點選要複製的紀錄"); return; }
+      // 複製選取
+      $("btnCopyPicked").addEventListener("click", async ()=>{
+        const all = dedup(JSON.parse(localStorage.getItem("monthlyBonus") || "[]"));
+        if (!window.__selSet || window.__selSet.size===0){ alert("請先勾選要複製的紀錄"); return; }
         const defDate = new Date().toLocaleString();
-        const inDate = prompt("複製選取的紀錄：輸入新日期（套用於所有被選取）", defDate);
+        const inDate = prompt("複製選取的紀錄：輸入新日期（套用於所有勾選）", defDate);
         if (inDate===null) return;
         const dateStr = (inDate && inDate.trim()) ? inDate.trim() : defDate;
-        const all = getArr(); const ym = ymKey();
         const ids = Array.from(window.__selSet).sort((a,b)=>a-b);
-        ids.forEach((i, k)=>{
-          const r = all[i]; if (!r) return;
-          const rec2 = Object.assign({}, r, { date: dateStr, createdAt: Date.now() + k });
+        ids.forEach((gIdx,k)=>{
+          const r = all[gIdx]; if (!r) return;
+          const rec2 = Object.assign({}, r, { date: dateStr, createdAt: Date.now()+k, _id: undefined });
           all.push(rec2);
-          try{
-            db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records").add(rec2);
-          }catch(e){ console.warn(e); }
+          const ym = ymFromDateStr(dateStr);
+          db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records").add(rec2);
+          db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).set({month:ym,updatedAt:Date.now()},{merge:true});
         });
-        saveArr(all); renderCurrent(all);
+        const merged = dedup(all);
+        localStorage.setItem("monthlyBonus", JSON.stringify(merged));
+        window.__ALL_RECORDS__ = merged.slice();
         window.__selSet.clear();
-        toast("已複製 " + ids.length + " 筆（日期：" + dateStr + "）");
+        renderCurrent(merged);
+        toast("已複製 "+ids.length+" 筆");
       });
-    }
-  });
 
-  const _deleteByIndex = deleteByIndex;
-  window.deleteByIndex = async function(i){
-    const arr = getArr();
-    const ym = ymKey();
-    if (window.__selSet && window.__selSet.size>0){
-      const ids = Array.from(window.__selSet).sort((a,b)=>b-a);
-      if (!confirm("確定要刪除 " + ids.length + " 筆選取的紀錄？")) return;
-      try{
-        const col = db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records");
-        for (const idx of ids){
-          const target = arr[idx];
-          if (!target) continue;
-          try{
-            if (target && target._id) await col.doc(target._id).delete();
-            else if (typeof target?.createdAt === "number"){
-              const q = await col.where("createdAt","==", target.createdAt).limit(1).get();
-              if (!q.empty) await q.docs[0].ref.delete();
-            }
-          }catch(e){ console.warn(e); }
-          arr.splice(idx,1);
-        }
-        saveArr(arr); renderCurrent(arr); window.__selSet.clear();
-        toast("已刪除選取紀錄");
-      }catch(e){ console.warn(e); alert("刪除失敗"); }
-      return;
-    }
-    return _deleteByIndex(i);
-  };
-})();
+      // 快捷鍵：Ctrl/⌘+1 僅上月、+2 合併、+3 僅本月
+      document.addEventListener("keydown", (e)=>{
+        const k=(e.key||'').toLowerCase();
+        if ((e.ctrlKey||e.metaKey) && k==='1'){ e.preventDefault(); setViewMode("prev"); }
+        if ((e.ctrlKey||e.metaKey) && k==='2'){ e.preventDefault(); setViewMode("both"); }
+        if ((e.ctrlKey||e.metaKey) && k==='3'){ e.preventDefault(); setViewMode("current"); }
+      });
 
-</script>
+      renderCurrent(dedup(JSON.parse(localStorage.getItem("monthlyBonus") || "[]")));
+      refreshBaseDisplay();
+      maybeFetchBaseFromCloud();
+    });
+  </script>
 </body>
 </html>
