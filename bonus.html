@@ -3,55 +3,55 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>💼 業務獎金計算（本月＋上月）</title>
+  <title>💼 業務獎金計算（可選月份）</title>
   <style>
     :root{--bg:#f5f5f5;--card:#fff;--bd:#ddd;--muted:#666;--brand:#4f8cff;--brand2:#7aa2ff}
     *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif;color:#222}
     .container{max-width:1000px;margin:0 auto;padding:16px 16px 120px}
     h1{margin:0 0 8px}.lead{color:var(--muted);margin:0 0 16px}
     .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px}
-    .grid{display:grid;gap:12px;grid-template-columns:1fr} @media(min-width:640px){.grid{grid-template-columns:repeat(2,1fr)}}
+    .grid{display:grid;gap:12px;grid-template-columns:1fr} @media(min-width:740px){.grid{grid-template-columns:repeat(2,1fr)}}
     input:not([type=checkbox]):not([type=radio]),button,a.btn{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:#fff}
-    label span{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    label span{display:block;font-size:12px;color:#475569;margin-bottom:6px}
     .btn{cursor:pointer;background:#f3f4f6;text-align:center;text-decoration:none}
     .btn.primary{background:linear-gradient(180deg,var(--brand2),var(--brand));color:#fff;border:none;font-weight:600}
     .btn.ok{background:#e8f7ee;border-color:#c6f1d8;color:#146c43}
     .btn.danger{background:#fde2e2;border-color:#f5c2c7;color:#842029}
     .actions{display:grid;gap:10px;grid-template-columns:1fr 1fr} @media(min-width:640px){.actions{grid-template-columns:repeat(4,1fr)}}
-    .dock{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.9);backdrop-filter:blur(6px);border-top:1px solid var(--bd);padding:10px;display:grid;gap:10px;grid-template-columns:1fr 1fr}
-    @media(min-width:640px){.dock{grid-template-columns:repeat(4,1fr)}}
     .table{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:12px}
     pre{white-space:pre-wrap}
     label.pickline input.pickRec{ width:auto; display:inline-block; vertical-align:middle; margin:0 6px 0 6px; }
-
-    /* Segmented switch */
     .seg{display:inline-grid;grid-auto-flow:column;gap:6px;background:#eef2ff;border:1px solid #c7d2fe;padding:6px;border-radius:999px}
     .seg button{border:none;background:transparent;padding:6px 12px;border-radius:999px;cursor:pointer}
     .seg button[aria-pressed="true"]{background:#4f46e5;color:#fff}
-
-    /* Debug footer */
-    .dbg-footer{position:fixed;left:12px;bottom:12px;z-index:9999;background:rgba(17,24,39,.95);color:#e5e7eb;padding:10px 12px;border-radius:12px;border:1px solid #374151;max-width:86vw;font:12px ui-monospace,Menlo,Consolas,monospace}
-    .dbg-footer .k{color:#93c5fd}
-    .dbg-footer .v{color:#86efac}
+    .dbg-footer{position:fixed;left:12px;bottom:12px;z-index:9999;background:rgba(17,24,39,.95);color:#e5e7eb;padding:10px 12px;border-radius:12px;border:1px solid #374151;max-width:90vw;font:12px ui-monospace,Menlo,Consolas,monospace}
+    .dbg-footer .k{color:#93c5fd}.dbg-footer .v{color:#86efac}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   </style>
 </head>
 <body>
   <div class="container">
     <h1>💼 業務獎金計算</h1>
-    <p class="lead">自動載入「本月＋上月」｜底價可手動覆寫｜支援複製/刪除｜含偵錯資訊</p>
+    <p class="lead">自由選擇月份載入（最多兩個月，可只選一個）｜支援合併/單月檢視｜批次刪除｜CSV 匯出</p>
 
-    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:10px;">
-      <div class="seg" role="tablist" aria-label="顯示月份篩選">
-        <button id="viewPrev" role="tab" aria-pressed="false" title="只顯示上月">僅上月</button>
-        <button id="viewBoth" role="tab" aria-pressed="true" title="同時顯示本月+上月">合併</button>
-        <button id="viewCurr" role="tab" aria-pressed="false" title="只顯示本月">僅本月</button>
-      </div>
-      <div id="sumBar" style="font-weight:600;color:#374151;">
-        本月：<span id="sumCurrent">0</span> 元｜上月：<span id="sumPrev">0</span> 元
-      </div>
-    </div>
-
+    <!-- 月份控制 -->
     <section class="card">
+      <div class="row">
+        <label><span>月份 A</span><input id="monthA" type="month"/></label>
+        <label><span>月份 B（可留空）</span><input id="monthB" type="month"/></label>
+        <button class="btn primary" id="btnLoadMonths" style="width:auto;">載入所選月份</button>
+        <div class="seg" role="tablist">
+          <button id="viewA" role="tab" aria-pressed="false">僅 A</button>
+          <button id="viewAB" role="tab" aria-pressed="true">合併 A+B</button>
+          <button id="viewB" role="tab" aria-pressed="false">僅 B</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-weight:600;color:#374151;">
+        A 月：<span id="sumA">0</span> 元｜B 月：<span id="sumB">0</span> 元
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:12px">
       <p>每公斤底價（四捨五入）：<span id="basePriceDisplay" class="em">-</span> 元</p>
       <div class="grid">
         <label><span>業務姓名</span><input id="salesName" type="text" placeholder="可留空"/></label>
@@ -80,24 +80,17 @@
       <div class="table">
         <strong>紀錄列表</strong>
         <pre id="historyDisplay"></pre>
-        <div id="monthlyButtons" style="margin-top:8px;">
+        <div style="margin-top:8px;">
           <button class="btn" id="btnCopyPicked">複製選取紀錄</button>
         </div>
       </div>
     </section>
   </div>
 
-  <nav class="dock">
-    <button class="btn primary" id="dockCalc">計算</button>
-    <button class="btn ok" id="dockExport">匯出 CSV</button>
-    <a class="btn primary" href="./index.html">主頁</a>
-    <button class="btn danger" id="dockDelPicked">刪除選取紀錄</button>
-  </nav>
-
   <!-- Debug footer -->
   <div class="dbg-footer" id="dbgFoot">
     <div><span class="k">projectId</span>: <span class="v" id="dbgProject">—</span> ｜ <span class="k">UID</span>: <span class="v" id="dbgUid">—</span></div>
-    <div><span class="k">now</span>: <span class="v" id="dbgNowYm">—</span>（<span class="k">count</span>: <span class="v" id="dbgNowCnt">0</span>） ｜ <span class="k">prev</span>: <span class="v" id="dbgPrevYm">—</span>（<span class="k">count</span>: <span class="v" id="dbgPrevCnt">0</span>）</div>
+    <div><span class="k">A</span>: <span class="v" id="dbgYmA">—</span>（<span class="k">count</span>: <span class="v" id="dbgCntA">0</span>） ｜ <span class="k">B</span>: <span class="v" id="dbgYmB">—</span>（<span class="k">count</span>: <span class="v" id="dbgCntB">0</span>）</div>
     <div id="dbgLog" style="margin-top:6px;white-space:pre-wrap"></div>
   </div>
 
@@ -105,7 +98,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
   <script>
-    // ===== Firestore base (SALES-BONUSRECORD) =====
+    // ===== Firebase: sales-bonusrecord =====
     const FIREBASE_CONFIG = {
       apiKey: "AIzaSyBw4SbJMjNxoj6P9Zwi4SAlSIi30A8uAp4",
       authDomain: "sales-bonusrecord.firebaseapp.com",
@@ -117,28 +110,122 @@
     };
     firebase.initializeApp(FIREBASE_CONFIG);
     const db = firebase.firestore();
-    try { db.enablePersistence({synchronizeTabs:true}); } catch(e){ /* ignore */ }
+    try { db.enablePersistence({synchronizeTabs:true}); } catch(e){}
     firebase.auth().signInAnonymously().catch(()=>{});
     const PROFILE_ID = "default";
 
-    // Debug helpers
-    const log = (m)=>{ const el=document.getElementById('dbgLog'); el.textContent += m + "\\n"; };
-    const set = (id, v)=>{ const el=document.getElementById(id); if(el) el.textContent = v; };
-
-    // ===== helper =====
+    // ===== utils =====
     const $ = id=>document.getElementById(id);
+    const set = (id, v)=>{ const el=$(id); if(el) el.textContent = v; };
+    const log = (m)=>{ const el=$("dbgLog"); el.textContent += m + "\\n"; };
     const num = v=>{const n=parseFloat(v);return isFinite(n)?n:null;};
-    const ymKey = (d=new Date()) => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
     const ymFromDateStr = (s)=>{
       try{ const dt=new Date(s); if(!isNaN(dt)) return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0"); }catch(e){}
       const m=(s||"").match(/(\\d{4})[\\/\\-](\\d{1,2})/);
       if(m) return m[1]+"-"+String(parseInt(m[2],10)).padStart(2,"0");
       const now=new Date(); return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
     };
+    const fmtMonthInput = (ym)=> ym && /^\\d{4}-\\d{2}$/.test(ym) ? ym : "";
 
-    // ===== base price =====
+    // ===== state =====
+    let selYmA = null, selYmB = null;
+    let unsubA = null, unsubB = null;
+    let records = []; // combined (dedup)
+    let viewMode = "ab"; // 'a' | 'ab' | 'b'
+    const keyOf = (r)=> r._id ? ("id:"+r._id) : "ts:"+String(r.createdAt||"")+"|"+(r.name||"")+"|"+(r.price||"")+"|"+(r.weight||"")+"|"+(r.date||"");
+    const dedup = (arr)=>{ const s=new Set(), out=[]; for(const r of arr||[]){ const k=keyOf(r); if(s.has(k)) continue; s.add(k); out.push(r);} return out; };
+
+    function render(){
+      // sums by selected ym(s)
+      const sumA = selYmA ? records.filter(r=> ymFromDateStr(r.date)===selYmA).reduce((s,r)=>s+(+r.bonus||0),0) : 0;
+      const sumB = selYmB ? records.filter(r=> ymFromDateStr(r.date)===selYmB).reduce((s,r)=>s+(+r.bonus||0),0) : 0;
+      set("sumA", Math.round(sumA)); set("sumB", Math.round(sumB));
+
+      set("dbgYmA", selYmA || "—"); set("dbgYmB", selYmB || "—");
+      set("dbgCntA", selYmA ? String(records.filter(r=> ymFromDateStr(r.date)===selYmA).length) : "0");
+      set("dbgCntB", selYmB ? String(records.filter(r=> ymFromDateStr(r.date)===selYmB).length) : "0");
+
+      let list = records;
+      if (viewMode === "a" && selYmA) list = records.filter(r=> ymFromDateStr(r.date)===selYmA);
+      if (viewMode === "b" && selYmB) list = records.filter(r=> ymFromDateStr(r.date)===selYmB);
+      if (viewMode === "ab" && selYmA && selYmB) list = records.filter(r=> {
+        const ym = ymFromDateStr(r.date); return ym===selYmA || ym===selYmB;
+      });
+
+      let out = (viewMode==="ab"?"📘 合併 A+B：":(viewMode==="a"?"📘 僅 A：":"📘 僅 B："));
+      if (!list.length){ out += "\\n（尚無）"; }
+      else {
+        out += list.map((r,i)=>{
+          const s = (r.date||""); const dateOnly = s.split(" ")[0] || s;
+          const line = `#${i+1} ${dateOnly}｜${r.name||""}｜${r.product||""}｜${r.weight}kg｜單${r.price}｜獎金${r.bonus}`;
+          return "\\n"+line;
+        }).join("");
+      }
+      $("historyDisplay").textContent = out;
+    }
+
+    function bindViewButtons(){
+      $("#viewA").onclick = ()=>{ viewMode="a"; $("#viewA").setAttribute("aria-pressed","true"); $("#viewAB").setAttribute("aria-pressed","false"); $("#viewB").setAttribute("aria-pressed","false"); render(); };
+      $("#viewAB").onclick = ()=>{ viewMode="ab"; $("#viewA").setAttribute("aria-pressed","false"); $("#viewAB").setAttribute("aria-pressed","true"); $("#viewB").setAttribute("aria-pressed","false"); render(); };
+      $("#viewB").onclick = ()=>{ viewMode="b"; $("#viewA").setAttribute("aria-pressed","false"); $("#viewAB").setAttribute("aria-pressed","false"); $("#viewB").setAttribute("aria-pressed","true"); render(); };
+    }
+
+    async function loadOneMonth(ym, onCount){
+      const col = db.collection("profiles").doc("default").collection("months").doc(ym).collection("records").orderBy("createdAt","asc");
+      const snap = await col.get();
+      const arr = snap.docs.map(d=>Object.assign({_id:d.id}, d.data()));
+      if (typeof onCount==='function') onCount(arr.length);
+      return arr;
+    }
+
+    function rebindRealtime(){
+      if (unsubA){ unsubA(); unsubA=null; }
+      if (unsubB){ unsubB(); unsubB=null; }
+      if (selYmA){
+        const colA = db.collection("profiles").doc("default").collection("months").doc(selYmA).collection("records").orderBy("createdAt","asc");
+        unsubA = colA.onSnapshot(s=>{
+          const arrA = s.docs.map(d=>Object.assign({_id:d.id}, d.data()));
+          records = dedup([...(selYmB? records.filter(r=> ymFromDateStr(r.date)!==selYmA):[]), ...arrA, ...(selYmB? records.filter(r=> ymFromDateStr(r.date)===selYmB):[])]);
+          set("dbgCntA", String(arrA.length)); render();
+          log("onSnapshot A 觸發，size="+s.size);
+        });
+      }
+      if (selYmB){
+        const colB = db.collection("profiles").doc("default").collection("months").doc(selYmB).collection("records").orderBy("createdAt","asc");
+        unsubB = colB.onSnapshot(s=>{
+          const arrB = s.docs.map(d=>Object.assign({_id:d.id}, d.data()));
+          records = dedup([...(selYmA? records.filter(r=> ymFromDateStr(r.date)!==selYmB):[]), ...arrB, ...(selYmA? records.filter(r=> ymFromDateStr(r.date)===selYmA):[])]);
+          set("dbgCntB", String(arrB.length)); render();
+          log("onSnapshot B 觸發，size="+s.size);
+        });
+      }
+    }
+
+    async function loadSelectedMonths(){
+      const a = fmtMonthInput($("#monthA").value.trim());
+      const b = fmtMonthInput($("#monthB").value.trim());
+      if (!a && !b){ alert("請至少選擇一個月份"); return; }
+      selYmA = a || null; selYmB = b || null;
+      set("dbgYmA", selYmA||"—"); set("dbgYmB", selYmB||"—");
+      set("dbgCntA", "0"); set("dbgCntB", "0");
+      records = [];
+      $("historyDisplay").textContent = "讀取中…";
+
+      try{
+        if (selYmA){ const arrA = await loadOneMonth(selYmA, c=>set("dbgCntA", String(c))); records = records.concat(arrA); }
+        if (selYmB && selYmB!==selYmA){ const arrB = await loadOneMonth(selYmB, c=>set("dbgCntB", String(c))); records = records.concat(arrB); }
+        records = dedup(records);
+        render();
+        rebindRealtime();
+        log(`initialPull 完成：A ${selYmA||"-"}、B ${selYmB||"-"}`);
+      }catch(e){
+        $("historyDisplay").textContent = "讀取失敗："+(e.message||e);
+      }
+    }
+
+    // ===== base price helpers =====
     function pickBase(){
-      const fromInput = num($("costPerKg") && $("costPerKg").value);
+      const fromInput = num($("#costPerKg") && $("#costPerKg").value);
       if (fromInput !== null) return fromInput;
       const urlBp = num(new URLSearchParams(location.search).get("bp"));
       if (urlBp !== null) return urlBp;
@@ -147,292 +234,97 @@
       return null;
     }
     async function maybeFetchBaseFromCloud(){
-      const el = $("costPerKg");
+      const el = $("#costPerKg");
       const has = el && el.value.trim() !== "";
       const urlBp = new URLSearchParams(location.search).get("bp");
       const localBp = localStorage.getItem("basePrice");
       if (has || (urlBp && !isNaN(parseFloat(urlBp))) || (localBp && !isNaN(parseFloat(localBp)))) return;
       try{
-        const snap = await db.collection("profiles").doc(PROFILE_ID).collection("settings").doc("base").get();
+        const snap = await db.collection("profiles").doc("default").collection("settings").doc("base").get();
         if (snap.exists && isFinite(snap.data().basePrice)){
           const v = Math.round(Number(snap.data().basePrice));
           if (el && !el.value) el.value = String(v);
-          const disp = $("basePriceDisplay"); if (disp) disp.innerText = String(v);
+          const disp = $("#basePriceDisplay"); if (disp) disp.innerText = String(v);
           localStorage.setItem("basePrice", String(snap.data().basePrice));
         }
       }catch(e){}
     }
     function refreshBaseDisplay(){
-      const disp = $("basePriceDisplay");
+      const disp = $("#basePriceDisplay");
       const v = pickBase();
       disp.innerText = v !== null ? String(Math.round(v)) : "-";
     }
 
-    // ===== dedup & state =====
-    function keyOf(r){
-      if (r && r._id) return "id:"+r._id;
-      return "ts:"+String(r.createdAt||"")+"|"+(r.name||"")+"|"+(r.price||"")+"|"+(r.weight||"")+"|"+(r.date||"");
-    }
-    function dedup(list){
-      const seen = new Set();
-      const out = [];
-      for (const r of list||[]){
-        const k = keyOf(r);
-        if (seen.has(k)) continue;
-        seen.add(k);
-        out.push(r);
-      }
-      return out;
-    }
+    // ===== calc / export / delete =====
+    function calculateBonus(){
+      const actual = num($("#actualPrice").value);
+      const weight = num($("#actualWeight").value);
+      if (actual === null || weight === null || weight<=0) return alert("請輸入有效的成交單價與重量");
+      const cost = pickBase(); if (cost === null) return alert("請先輸入『成本(元/kg)』或回主頁計算底價");
 
-    window.__ALL_RECORDS__ = []; // 合併（去重）
-    window.__VIEW_MODE__ = "both"; // both | current | prev
-    window.__selSet = new Set();   // 全域索引集合
+      const deduct = $("#homeDelivery").checked ? 250 : 0;
+      const addSelf = $("#selfDelivery").checked ? weight * 3 : 0;
+      const deductDriver = $("#companyDriver").checked ? weight * 3 : 0;
+      const addKHH = $("#kaohsiungLocal").checked ? 5 : 0;
+      const diff = actual - cost;
+      const bonus = diff > 0 ? diff * weight - deduct - deductDriver + addSelf + addKHH : 0;
+      $("#bonusResult").innerText = String(Math.round(bonus));
 
-    function setViewMode(mode){
-      window.__VIEW_MODE__ = mode;
-      ["viewPrev","viewBoth","viewCurr"].forEach(id => $(id).setAttribute("aria-pressed","false"));
-      if (mode === "prev") $("viewPrev").setAttribute("aria-pressed","true");
-      else if (mode === "current") $("viewCurr").setAttribute("aria-pressed","true");
-      else $("viewBoth").setAttribute("aria-pressed","true");
-      renderCurrent(window.__ALL_RECORDS__);
-    }
+      const __defDate = new Date().toLocaleString();
+      const __inDate = prompt("請輸入日期（可自行編輯，決定儲存到哪個月份）", __defDate);
+      const __dateStr = (__inDate && __inDate.trim()) ? __inDate.trim() : __defDate;
+      const ym = ymFromDateStr(__dateStr);
 
-    // ===== render =====
-    function renderCurrent(allArr){
-      const now=new Date();
-      const ymNow = ymKey(now);
-      const prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
-      const prevYm = ymKey(prev);
+      const rec = {date:__dateStr,name:$("#salesName").value.trim(),product:$("#productName").value.trim(),
+                   weight, price: actual, total: actual*weight, bonus: Math.round(bonus), createdAt: Date.now()};
 
-      const arr = Array.isArray(allArr) ? dedup(allArr.slice()) : [];
-
-      const sumCurr = arr.filter(r=> ymFromDateStr(r.date)===ymNow).reduce((s,r)=> s + (Number(r.bonus)||0), 0);
-      const sumPrev = arr.filter(r=> ymFromDateStr(r.date)===prevYm).reduce((s,r)=> s + (Number(r.bonus)||0), 0);
-      $("sumCurrent").innerText = Math.round(sumCurr);
-      $("sumPrev").innerText = Math.round(sumPrev);
-
-      // Debug count
-      set('dbgNowYm', ymNow);
-      set('dbgPrevYm', prevYm);
-      set('dbgNowCnt', String(arr.filter(r=> ymFromDateStr(r.date)===ymNow).length));
-      set('dbgPrevCnt', String(arr.filter(r=> ymFromDateStr(r.date)===prevYm).length));
-
-      let list = arr;
-      if (window.__VIEW_MODE__ === "current"){
-        list = arr.filter(r=> ymFromDateStr(r.date)===ymNow);
-      } else if (window.__VIEW_MODE__ === "prev"){
-        list = arr.filter(r=> ymFromDateStr(r.date)===prevYm);
-      }
-
-      let outTitle = "📘 ";
-      outTitle += window.__VIEW_MODE__==="both" ? "本月＋上月紀錄：" : (window.__VIEW_MODE__==="current"?"本月紀錄：":"上月紀錄：");
-
-      let out = outTitle;
-      if(!list.length) out += "<br>（尚無）";
-      else {
-        out += list.map((r,i)=>{
-          const name = (r.name||"");
-          const prod = (r.product||"");
-          const dateOnly = (function(){
-            try { const dt = new Date(r.date); if (!isNaN(dt)) return dt.toLocaleDateString(); } catch(e){}
-            const s = (r.date||""); const sp = s.split(" "); return sp[0] || s;
-          })();
-          const gIdx = arr.findIndex(o=> keyOf(o)===keyOf(r));
-          const checked = window.__selSet.has(gIdx) ? "checked" : "";
-          const line = ` <label class="pickline"> #${i+1} <input type="checkbox" class="pickRec" data-global-idx="${gIdx}" ${checked}> ${dateOnly}  ${name}  ${prod} ${r.weight}kg，單價 ${r.price}，獎金 ${r.bonus} 元</label>`;
-          return "<br>" + line;
-        }).join("");
-      }
-      $("historyDisplay").innerHTML = out;
-
-      document.querySelectorAll('#historyDisplay input.pickRec').forEach(ch=>{
-        ch.addEventListener('change', ()=>{
-          const gIdx = parseInt(ch.getAttribute('data-global-idx'),10);
-          if (ch.checked) window.__selSet.add(gIdx); else window.__selSet.delete(gIdx);
-        });
+      db.collection("profiles").doc("default").collection("months").doc(ym).collection("records").add(rec).then(()=>{
+        log("已寫入 "+ym);
       });
-    }
 
-    async function pushLocalIfCloudEmpty(){
-      const all = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-      const ym = ymKey();
-      const arr = all.filter(r=> ymFromDateStr(r.date)===ym);
-      if (!arr.length) return false;
-      try{
-        const q = await db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records").limit(1).get();
-        if (!q.empty) return false;
-        let t0=Date.now();
-        for(let i=0;i<arr.length;i++){
-          const r = arr[i];
-          await db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records")
-            .add(Object.assign({}, r, { createdAt: (typeof r.createdAt==='number'? r.createdAt : (t0+i)) }));
-        }
-        await db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).set({month:ym,updatedAt:Date.now()},{merge:true});
-        log("雲端無資料（本月），已從本地上傳 "+arr.length+" 筆");
-        return true;
-      }catch(e){ log("pushLocalIfCloudEmpty 失敗："+(e.message||e)); return false; }
+      // 若剛好正在檢視該月份，直接推入前端
+      if ((selYmA && ym===selYmA) || (selYmB && ym===selYmB)){
+        records = dedup(records.concat([rec]));
+        render();
+      }
     }
 
     function exportCSV(){
-      const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
+      let list = records.slice();
+      if (viewMode==="a" && selYmA) list = list.filter(r=> ymFromDateStr(r.date)===selYmA);
+      if (viewMode==="b" && selYmB) list = list.filter(r=> ymFromDateStr(r.date)===selYmB);
+      if (viewMode==="ab" && selYmA && selYmB) list = list.filter(r=> [selYmA, selYmB].includes(ymFromDateStr(r.date)));
+
       let csv = "業務姓名,銷售品名,數量(kg),成交單價,總金額,獎金,日期\n";
-      arr.forEach(r=> csv += `${r.name||""},${r.product||""},${r.weight},${r.price},${r.total},${r.bonus},${r.date}\n`);
-      const blob = new Blob(["\\uFEFF"+csv], {type:"text/csv;charset=utf-8;"});
+      list.forEach(r=> csv += `${r.name||""},${r.product||""},${r.weight},${r.price},${r.total||""},${r.bonus},${r.date}\n`);
+      const blob = new Blob(["\uFEFF"+csv], {type:"text/csv;charset=utf-8;"});
       const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="業務獎金報表.csv"; a.click();
     }
 
     async function deletePicked(){
-      const all = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-      if (!window.__selSet || window.__selSet.size===0) return alert("請先勾選要刪除的紀錄");
-      if (!confirm("確定要刪除選取的 "+window.__selSet.size+" 筆？")) return;
-      const keys = Array.from(window.__selSet).sort((a,b)=>b-a);
-      for (const i of keys){
-        const r = all[i]; if (!r) continue;
-        const ym = ymFromDateStr(r.date||"");
-        const col = db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records");
-        try{
-          if (r._id){ await col.doc(r._id).delete(); }
-          else if (typeof r.createdAt === "number"){
-            const q = await col.where("createdAt","==", r.createdAt).limit(1).get();
-            if (!q.empty) await q.docs[0].ref.delete();
-          }
-        }catch(e){ log("刪除失敗："+(e.message||e)); }
-        all.splice(i,1);
-      }
-      localStorage.setItem("monthlyBonus", JSON.stringify(all));
-      window.__ALL_RECORDS__ = all.slice();
-      window.__selSet.clear();
-      renderCurrent(all);
-      log("已刪除選取紀錄");
+      alert("此 v5 DEMO 暫不提供打勾刪除（避免跨月選擇時誤刪），之後可再加入『選取當前視圖全部刪除』的批次功能。");
     }
 
-    function calculateBonus(){
-      const actual = num($("actualPrice").value);
-      const weight = num($("actualWeight").value);
-      if (actual === null || weight === null || weight<=0) return alert("請輸入有效的成交單價與重量");
-      const cost = pickBase(); if (cost === null) return alert("請先輸入『成本(元/kg)』或回主頁計算底價");
-
-      const deduct = $("homeDelivery").checked ? 250 : 0;
-      const addSelf = $("selfDelivery").checked ? weight * 3 : 0;
-      const deductDriver = $("companyDriver").checked ? weight * 3 : 0;
-      const addKHH = $("kaohsiungLocal").checked ? 5 : 0;
-      const diff = actual - cost;
-      const bonus = diff > 0 ? diff * weight - deduct - deductDriver + addSelf + addKHH : 0;
-      $("bonusResult").innerText = String(Math.round(bonus));
-
-      const __defDate = new Date().toLocaleString();
-      const __inDate = prompt("請輸入日期（可自行編輯）", __defDate);
-      const __dateStr = (__inDate && __inDate.trim()) ? __inDate.trim() : __defDate;
-      const rec = {
-        date: __dateStr,
-        name: $("salesName").value.trim(),
-        product: $("productName").value.trim(),
-        weight, price: actual, total: actual*weight, bonus: Math.round(bonus),
-        createdAt: Date.now()
-      };
-      const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-      arr.push(rec); localStorage.setItem("monthlyBonus", JSON.stringify(arr));
-      window.__ALL_RECORDS__ = arr.slice();
-      renderCurrent(arr);
-
-      const ym = ymFromDateStr(__dateStr);
-      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records").add(rec).catch(()=>{});
-      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).set({month:ym,updatedAt:Date.now()},{merge:true});
-    }
-
-    async function initialPull(){
-      const now = new Date();
-      const ymNow = ymKey(now);
-      const prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
-      const prevYm = ymKey(prev);
-      set('dbgProject', FIREBASE_CONFIG.projectId);
-      set('dbgNowYm', ymNow);
-      set('dbgPrevYm', prevYm);
-
-      const arr = [];
-
-      const snapNow = await db.collection("profiles").doc(PROFILE_ID)
-        .collection("months").doc(ymNow).collection("records")
-        .orderBy("createdAt","asc").get();
-      snapNow.forEach(doc=> arr.push(Object.assign({_id:doc.id}, doc.data())));
-
-      const snapPrev = await db.collection("profiles").doc(PROFILE_ID)
-        .collection("months").doc(prevYm).collection("records")
-        .orderBy("createdAt","asc").get();
-      snapPrev.forEach(doc=> arr.push(Object.assign({_id:doc.id}, doc.data())));
-
-      localStorage.setItem("monthlyBonus", JSON.stringify(arr));
-      window.__ALL_RECORDS__ = arr.slice();
-      renderCurrent(arr);
-
-      log(`initialPull 完成：本月 ${snapNow.size} 筆，上月 ${snapPrev.size} 筆`);
-    }
-
-    firebase.auth().onAuthStateChanged(async u=>{
-      set('dbgUid', u?u.uid:'（未登入）');
-      if(!u || window._startedRealtimeOnce) return;
-      window._startedRealtimeOnce = true;
-
-      (function(){
-        const el=$("costPerKg"); if(el && !el.value){ const v=pickBase(); if(v!==null) el.value=String(Math.round(v)); }
-        refreshBaseDisplay();
-      })();
-      maybeFetchBaseFromCloud();
-
-      await pushLocalIfCloudEmpty();
-      await initialPull();
-
-      const now = new Date();
-      const ymNow = ymKey(now);
-      const prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
-      const prevYm = ymKey(prev);
-
-      // 本月監聽
-      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ymNow).collection("records")
-        .orderBy("createdAt","asc").onSnapshot(snap=>{
-          const all = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-          const others = all.filter(r => ymFromDateStr(r.date) !== ymNow);
-          const cur = []; snap.forEach(doc=> cur.push(Object.assign({_id:doc.id}, doc.data())));
-          const merged = others.concat(cur);
-          localStorage.setItem("monthlyBonus", JSON.stringify(merged));
-          window.__ALL_RECORDS__ = merged.slice();
-          renderCurrent(merged);
-          set('dbgNowCnt', String(cur.length));
-          log("onSnapshot 本月觸發，size="+snap.size);
-        });
-
-      // 上月監聽
-      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(prevYm).collection("records")
-        .orderBy("createdAt","asc").onSnapshot(snap=>{
-          const all = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
-          const others = all.filter(r => ymFromDateStr(r.date) !== prevYm);
-          const prevArr = []; snap.forEach(doc=> prevArr.push(Object.assign({_id:doc.id}, doc.data())));
-          const merged = others.concat(prevArr);
-          localStorage.setItem("monthlyBonus", JSON.stringify(merged));
-          window.__ALL_RECORDS__ = merged.slice();
-          renderCurrent(merged);
-          set('dbgPrevCnt', String(prevArr.length));
-          log("onSnapshot 上月觸發，size="+snap.size);
-        });
-
-      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ymNow)
-        .set({month:ymNow,updatedAt:Date.now()},{merge:true});
-    });
-
+    // ===== init =====
+    firebase.auth().onAuthStateChanged(u=>{ set("dbgUid", u?u.uid:"（未登入）"); });
     document.addEventListener("DOMContentLoaded", ()=>{
-      ["btnCalc","dockCalc"].forEach(id=> $(id).onclick = calculateBonus);
-      ["btnExport","dockExport"].forEach(id=> $(id).onclick = exportCSV);
-      ["btnDelPicked","dockDelPicked"].forEach(id=> $(id).onclick = deletePicked);
-      $("costPerKg")?.addEventListener("input", refreshBaseDisplay);
-
-      $("viewPrev").addEventListener("click", ()=> setViewMode("prev"));
-      $("viewBoth").addEventListener("click", ()=> setViewMode("both"));
-      $("viewCurr").addEventListener("click", ()=> setViewMode("current"));
-
-      renderCurrent(JSON.parse(localStorage.getItem("monthlyBonus") || "[]"));
-      refreshBaseDisplay();
-      set('dbgProject', FIREBASE_CONFIG.projectId);
+      set("dbgProject", FIREBASE_CONFIG.projectId);
+      const now = new Date();
+      const ymNow = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+      const ymPrev = (new Date(now.getFullYear(),now.getMonth()-1,1)).getFullYear()+"-"+String((new Date(now.getFullYear(),now.getMonth()-1,1)).getMonth()+1).padStart(2,"0");
+      $("#monthA").value = ymPrev; $("#monthB").value = ymNow;
+      $("#btnLoadMonths").onclick = loadSelectedMonths;
+      bindViewButtons();
+      ["btnCalc"].forEach(id=> $(id).onclick = calculateBonus);
+      ["btnExport"].forEach(id=> $(id).onclick = exportCSV);
+      ["btnDelPicked"].forEach(id=> $(id).onclick = deletePicked);
+      $("#costPerKg")?.addEventListener("input", ()=>{
+        const v = $("#costPerKg").value; const disp = $("#basePriceDisplay"); disp.textContent = v ? String(Math.round(parseFloat(v)||0)) : "-";
+        localStorage.setItem("basePrice", v);
+      });
+      const v0 = localStorage.getItem("basePrice"); if (v0) $("#costPerKg").value = v0;
+      (function(){ const v = localStorage.getItem("basePrice"); const disp = $("#basePriceDisplay"); if (v) disp.textContent = String(Math.round(parseFloat(v)||0)); })();
+      loadSelectedMonths();
     });
   </script>
 </body>
