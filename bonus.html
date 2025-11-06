@@ -7,7 +7,7 @@
   <style>
     :root{--bg:#f5f5f5;--card:#fff;--bd:#ddd;--muted:#666;--brand:#4f8cff;--brand2:#7aa2ff}
     *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif;color:#222}
-    .container{max-width:1000px;margin:0 auto;padding:16px 16px 100px}
+    .container{max-width:1000px;margin:0 auto;padding:16px 16px 120px}
     h1{margin:0 0 8px}.lead{color:var(--muted);margin:0 0 16px}
     .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px}
     .grid{display:grid;gap:12px;grid-template-columns:1fr} @media(min-width:640px){.grid{grid-template-columns:repeat(2,1fr)}}
@@ -22,9 +22,6 @@
     @media(min-width:640px){.dock{grid-template-columns:repeat(4,1fr)}}
     .table{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:12px}
     pre{white-space:pre-wrap}
-    .toast-wrap{position:fixed;right:12px;bottom:12px;z-index:9999;display:grid;gap:8px;max-width:80vw}
-    .toast{background:rgba(0,0,0,.82);color:#fff;padding:10px 12px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:14px}
-    .dbg{position:fixed;left:12px;bottom:12px;background:rgba(255,255,255,.9);border:1px solid var(--bd);padding:8px;border-radius:10px;font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.1);z-index:9998}
     label.pickline input.pickRec{ width:auto; display:inline-block; vertical-align:middle; margin:0 6px 0 6px; }
 
     /* Segmented switch */
@@ -32,13 +29,16 @@
     .seg button{border:none;background:transparent;padding:6px 12px;border-radius:999px;cursor:pointer}
     .seg button[aria-pressed="true"]{background:#4f46e5;color:#fff}
 
-    #btnLoadMonth, #monthSelect, #btnToggleHistory, #btnBackToCurrent { display:none !important; }
+    /* Debug footer */
+    .dbg-footer{position:fixed;left:12px;bottom:12px;z-index:9999;background:rgba(17,24,39,.95);color:#e5e7eb;padding:10px 12px;border-radius:12px;border:1px solid #374151;max-width:86vw;font:12px ui-monospace,Menlo,Consolas,monospace}
+    .dbg-footer .k{color:#93c5fd}
+    .dbg-footer .v{color:#86efac}
   </style>
 </head>
 <body>
   <div class="container">
     <h1>💼 業務獎金計算</h1>
-    <p class="lead">自動載入「本月＋上月」｜底價自動帶入（可手動覆寫）｜可複製/刪除紀錄</p>
+    <p class="lead">自動載入「本月＋上月」｜底價可手動覆寫｜支援複製/刪除｜含偵錯資訊</p>
 
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:10px;">
       <div class="seg" role="tablist" aria-label="顯示月份篩選">
@@ -94,15 +94,19 @@
     <button class="btn danger" id="dockDelPicked">刪除選取紀錄</button>
   </nav>
 
-  <div id="toast-wrap" class="toast-wrap" hidden></div>
-  <div class="dbg" id="dbgPanel">UID: —<br>Profile: default<br>本地筆數: 0</div>
+  <!-- Debug footer -->
+  <div class="dbg-footer" id="dbgFoot">
+    <div><span class="k">projectId</span>: <span class="v" id="dbgProject">—</span> ｜ <span class="k">UID</span>: <span class="v" id="dbgUid">—</span></div>
+    <div><span class="k">now</span>: <span class="v" id="dbgNowYm">—</span>（<span class="k">count</span>: <span class="v" id="dbgNowCnt">0</span>） ｜ <span class="k">prev</span>: <span class="v" id="dbgPrevYm">—</span>（<span class="k">count</span>: <span class="v" id="dbgPrevCnt">0</span>）</div>
+    <div id="dbgLog" style="margin-top:6px;white-space:pre-wrap"></div>
+  </div>
 
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
   <script>
     // ===== Firestore base (SALES-BONUSRECORD) =====
-    window.FIREBASE_CONFIG = {
+    const FIREBASE_CONFIG = {
       apiKey: "AIzaSyBw4SbJMjNxoj6P9Zwi4SAlSIi30A8uAp4",
       authDomain: "sales-bonusrecord.firebaseapp.com",
       projectId: "sales-bonusrecord",
@@ -111,24 +115,23 @@
       appId: "1:679798751240:web:0ed7b227af33e0122fd1bd",
       measurementId: "G-WFSZG479WS"
     };
-    if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+    firebase.initializeApp(FIREBASE_CONFIG);
     const db = firebase.firestore();
-    try { db.enablePersistence({synchronizeTabs:true}); } catch(e){ console.warn(e); }
-    firebase.auth().signInAnonymously().catch(console.warn);
+    try { db.enablePersistence({synchronizeTabs:true}); } catch(e){ /* ignore */ }
+    firebase.auth().signInAnonymously().catch(()=>{});
     const PROFILE_ID = "default";
 
+    // Debug helpers
+    const log = (m)=>{ const el=document.getElementById('dbgLog'); el.textContent += m + "\\n"; };
+    const set = (id, v)=>{ const el=document.getElementById(id); if(el) el.textContent = v; };
+
     // ===== helper =====
-    function toast(msg, ms=2200){
-      const wrap = document.getElementById('toast-wrap'); wrap.hidden=false;
-      const t = document.createElement('div'); t.className='toast'; t.textContent=msg; wrap.appendChild(t);
-      setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .25s'; setTimeout(()=>t.remove(), 300); }, ms);
-    }
     const $ = id=>document.getElementById(id);
     const num = v=>{const n=parseFloat(v);return isFinite(n)?n:null;};
     const ymKey = (d=new Date()) => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
     const ymFromDateStr = (s)=>{
       try{ const dt=new Date(s); if(!isNaN(dt)) return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0"); }catch(e){}
-      const m=(s||"").match(/(\d{4})[\/\-](\d{1,2})/);
+      const m=(s||"").match(/(\\d{4})[\\/\\-](\\d{1,2})/);
       if(m) return m[1]+"-"+String(parseInt(m[2],10)).padStart(2,"0");
       const now=new Date(); return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
     };
@@ -157,7 +160,7 @@
           const disp = $("basePriceDisplay"); if (disp) disp.innerText = String(v);
           localStorage.setItem("basePrice", String(snap.data().basePrice));
         }
-      }catch(e){ console.warn(e); }
+      }catch(e){}
     }
     function refreshBaseDisplay(){
       const disp = $("basePriceDisplay");
@@ -190,7 +193,7 @@
       window.__VIEW_MODE__ = mode;
       ["viewPrev","viewBoth","viewCurr"].forEach(id => $(id).setAttribute("aria-pressed","false"));
       if (mode === "prev") $("viewPrev").setAttribute("aria-pressed","true");
-      else if (mode === "current") $("viewCurr")..setAttribute("aria-pressed","true");
+      else if (mode === "current") $("viewCurr").setAttribute("aria-pressed","true");
       else $("viewBoth").setAttribute("aria-pressed","true");
       renderCurrent(window.__ALL_RECORDS__);
     }
@@ -208,6 +211,12 @@
       const sumPrev = arr.filter(r=> ymFromDateStr(r.date)===prevYm).reduce((s,r)=> s + (Number(r.bonus)||0), 0);
       $("sumCurrent").innerText = Math.round(sumCurr);
       $("sumPrev").innerText = Math.round(sumPrev);
+
+      // Debug count
+      set('dbgNowYm', ymNow);
+      set('dbgPrevYm', prevYm);
+      set('dbgNowCnt', String(arr.filter(r=> ymFromDateStr(r.date)===ymNow).length));
+      set('dbgPrevCnt', String(arr.filter(r=> ymFromDateStr(r.date)===prevYm).length));
 
       let list = arr;
       if (window.__VIEW_MODE__ === "current"){
@@ -260,16 +269,16 @@
             .add(Object.assign({}, r, { createdAt: (typeof r.createdAt==='number'? r.createdAt : (t0+i)) }));
         }
         await db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).set({month:ym,updatedAt:Date.now()},{merge:true});
-        toast("雲端無資料（本月），已從本地上傳 "+arr.length+" 筆");
+        log("雲端無資料（本月），已從本地上傳 "+arr.length+" 筆");
         return true;
-      }catch(e){ console.warn(e); return false; }
+      }catch(e){ log("pushLocalIfCloudEmpty 失敗："+(e.message||e)); return false; }
     }
 
     function exportCSV(){
       const arr = JSON.parse(localStorage.getItem("monthlyBonus") || "[]");
       let csv = "業務姓名,銷售品名,數量(kg),成交單價,總金額,獎金,日期\n";
       arr.forEach(r=> csv += `${r.name||""},${r.product||""},${r.weight},${r.price},${r.total},${r.bonus},${r.date}\n`);
-      const blob = new Blob(["\uFEFF"+csv], {type:"text/csv;charset=utf-8;"});
+      const blob = new Blob(["\\uFEFF"+csv], {type:"text/csv;charset=utf-8;"});
       const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="業務獎金報表.csv"; a.click();
     }
 
@@ -288,14 +297,14 @@
             const q = await col.where("createdAt","==", r.createdAt).limit(1).get();
             if (!q.empty) await q.docs[0].ref.delete();
           }
-        }catch(e){ console.warn(e); }
+        }catch(e){ log("刪除失敗："+(e.message||e)); }
         all.splice(i,1);
       }
       localStorage.setItem("monthlyBonus", JSON.stringify(all));
       window.__ALL_RECORDS__ = all.slice();
       window.__selSet.clear();
       renderCurrent(all);
-      toast("已刪除選取紀錄");
+      log("已刪除選取紀錄");
     }
 
     function calculateBonus(){
@@ -328,7 +337,7 @@
       renderCurrent(arr);
 
       const ym = ymFromDateStr(__dateStr);
-      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records").add(rec).catch(console.warn);
+      db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).collection("records").add(rec).catch(()=>{});
       db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ym).set({month:ym,updatedAt:Date.now()},{merge:true});
     }
 
@@ -337,6 +346,9 @@
       const ymNow = ymKey(now);
       const prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
       const prevYm = ymKey(prev);
+      set('dbgProject', FIREBASE_CONFIG.projectId);
+      set('dbgNowYm', ymNow);
+      set('dbgPrevYm', prevYm);
 
       const arr = [];
 
@@ -353,10 +365,12 @@
       localStorage.setItem("monthlyBonus", JSON.stringify(arr));
       window.__ALL_RECORDS__ = arr.slice();
       renderCurrent(arr);
+
+      log(`initialPull 完成：本月 ${snapNow.size} 筆，上月 ${snapPrev.size} 筆`);
     }
 
     firebase.auth().onAuthStateChanged(async u=>{
-      $("dbgPanel").innerHTML = `UID: ${u?u.uid:"（未登入）"}<br>Profile: default<br>本地筆數: ${(JSON.parse(localStorage.getItem('monthlyBonus')||'[]').length)}`;
+      set('dbgUid', u?u.uid:'（未登入）');
       if(!u || window._startedRealtimeOnce) return;
       window._startedRealtimeOnce = true;
 
@@ -384,6 +398,8 @@
           localStorage.setItem("monthlyBonus", JSON.stringify(merged));
           window.__ALL_RECORDS__ = merged.slice();
           renderCurrent(merged);
+          set('dbgNowCnt', String(cur.length));
+          log("onSnapshot 本月觸發，size="+snap.size);
         });
 
       // 上月監聽
@@ -396,6 +412,8 @@
           localStorage.setItem("monthlyBonus", JSON.stringify(merged));
           window.__ALL_RECORDS__ = merged.slice();
           renderCurrent(merged);
+          set('dbgPrevCnt', String(prevArr.length));
+          log("onSnapshot 上月觸發，size="+snap.size);
         });
 
       db.collection("profiles").doc(PROFILE_ID).collection("months").doc(ymNow)
@@ -414,7 +432,7 @@
 
       renderCurrent(JSON.parse(localStorage.getItem("monthlyBonus") || "[]"));
       refreshBaseDisplay();
-      maybeFetchBaseFromCloud();
+      set('dbgProject', FIREBASE_CONFIG.projectId);
     });
   </script>
 </body>
