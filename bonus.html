@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>💼 業務獎金計算（可選月份）</title>
+  <title>💼 業務獎金計算（可選月份 v5d｜容錯強化）</title>
   <style>
     :root{--bg:#f5f5f5;--card:#fff;--bd:#ddd;--muted:#666;--brand:#4f8cff;--brand2:#7aa2ff}
     *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif;color:#222}
     .container{max-width:1000px;margin:0 auto;padding:16px 16px 120px}
-    h1{margin:0 0 8px}.lead{color:var(--muted);margin:0 0 16px}
+    h1{margin:0 0 8px}.lead{color:#374151;margin:0 0 8px}
+    small.hint{color:#6b7280}
     .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px}
     .grid{display:grid;gap:12px;grid-template-columns:1fr} @media(min-width:740px){.grid{grid-template-columns:repeat(2,1fr)}}
     input:not([type=checkbox]):not([type=radio]),button,a.btn{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:#fff}
@@ -20,32 +21,36 @@
     .actions{display:grid;gap:10px;grid-template-columns:1fr 1fr} @media(min-width:640px){.actions{grid-template-columns:repeat(4,1fr)}}
     .table{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:12px}
     pre{white-space:pre-wrap}
-    label.pickline input.pickRec{ width:auto; display:inline-block; vertical-align:middle; margin:0 6px 0 6px; }
     .seg{display:inline-grid;grid-auto-flow:column;gap:6px;background:#eef2ff;border:1px solid #c7d2fe;padding:6px;border-radius:999px}
     .seg button{border:none;background:transparent;padding:6px 12px;border-radius:999px;cursor:pointer}
     .seg button[aria-pressed="true"]{background:#4f46e5;color:#fff}
     .dbg-footer{position:fixed;left:12px;bottom:12px;z-index:9999;background:rgba(17,24,39,.95);color:#e5e7eb;padding:10px 12px;border-radius:12px;border:1px solid #374151;max-width:90vw;font:12px ui-monospace,Menlo,Consolas,monospace}
     .dbg-footer .k{color:#93c5fd}.dbg-footer .v{color:#86efac}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .mini{font-size:12px;color:#6b7280}
+    .err{color:#b91c1c;font-weight:600}
   </style>
 </head>
 <body>
   <div class="container">
     <h1>💼 業務獎金計算</h1>
-    <p class="lead">自由選擇月份載入（最多兩個月，可只選一個）｜支援合併/單月檢視｜批次刪除｜CSV 匯出</p>
+    <p class="lead">自由選擇月份載入（最多兩個月，可只選一個）｜支援合併/單月檢視｜CSV 匯出</p>
 
     <!-- 月份控制 -->
     <section class="card">
       <div class="row">
-        <label><span>月份 A</span><input id="monthA" type="month"/></label>
-        <label><span>月份 B（可留空）</span><input id="monthB" type="month"/></label>
+        <label><span>月份 A</span><input id="monthA" type="month" /></label>
+        <label><span>月份 B（可留空）</span><input id="monthB" type="month" /></label>
         <button class="btn primary" id="btnLoadMonths" style="width:auto;">載入所選月份</button>
+        <button class="btn" id="btnQuickNowPrev" style="width:auto;">一鍵載入：本月＋上月</button>
         <div class="seg" role="tablist">
           <button id="viewA" role="tab" aria-pressed="false">僅 A</button>
           <button id="viewAB" role="tab" aria-pressed="true">合併 A+B</button>
           <button id="viewB" role="tab" aria-pressed="false">僅 B</button>
         </div>
       </div>
+      <div class="mini" id="authHint" style="margin-top:6px;display:none;">⚠️ 尚未登入（匿名）。</div>
+      <div class="mini"><strong>狀態：</strong><span id="ping" class="err"></span></div>
       <div style="margin-top:8px;font-weight:600;color:#374151;">
         A 月：<span id="sumA">0</span> 元｜B 月：<span id="sumB">0</span> 元
       </div>
@@ -80,9 +85,6 @@
       <div class="table">
         <strong>紀錄列表</strong>
         <pre id="historyDisplay"></pre>
-        <div style="margin-top:8px;">
-          <button class="btn" id="btnCopyPicked">複製選取紀錄</button>
-        </div>
       </div>
     </section>
   </div>
@@ -98,7 +100,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
   <script>
-    // ===== Firebase: sales-bonusrecord =====
     const FIREBASE_CONFIG = {
       apiKey: "AIzaSyBw4SbJMjNxoj6P9Zwi4SAlSIi30A8uAp4",
       authDomain: "sales-bonusrecord.firebaseapp.com",
@@ -112,31 +113,50 @@
     const db = firebase.firestore();
     try { db.enablePersistence({synchronizeTabs:true}); } catch(e){}
     firebase.auth().signInAnonymously().catch(()=>{});
-    const PROFILE_ID = "default";
 
-    // ===== utils =====
     const $ = id=>document.getElementById(id);
     const set = (id, v)=>{ const el=$(id); if(el) el.textContent = v; };
     const log = (m)=>{ const el=$("dbgLog"); el.textContent += m + "\\n"; };
-    const num = v=>{const n=parseFloat(v);return isFinite(n)?n:null;};
+    const pingEl = ()=> document.getElementById("ping");
+
+    firebase.auth().onAuthStateChanged(u=>{
+      set("dbgUid", u?u.uid:"（未登入）");
+      document.getElementById("authHint").style.display = u ? "none" : "block";
+    });
+
+    // quick ping to verify connectivity & rules
+    async function ping(){
+      try{
+        const s = await db.collection("profiles").doc("default").collection("settings").doc("base").get();
+        if (s.exists){ pingEl().textContent = "已連線（settings/base 存在）"; pingEl().classList.remove("err"); }
+        else { pingEl().textContent = "已連線，但 settings/base 不存在（非必要，可忽略）"; pingEl().classList.remove("err"); }
+      }catch(e){
+        pingEl().textContent = "連線/權限錯誤：" + (e.message||e);
+        pingEl().classList.add("err");
+        log("ping 錯誤：" + (e.message||e));
+      }
+    }
+
+    function fmtMonthInput(ym){
+      if (!ym) return "";
+      const m = ym.match(/^(\\d{4})-(\\d{1,2})$/);
+      if (!m) return "";
+      const mm = String(parseInt(m[2],10)).padStart(2,"0");
+      return m[1] + "-" + mm;
+    }
     const ymFromDateStr = (s)=>{
       try{ const dt=new Date(s); if(!isNaN(dt)) return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0"); }catch(e){}
       const m=(s||"").match(/(\\d{4})[\\/\\-](\\d{1,2})/);
       if(m) return m[1]+"-"+String(parseInt(m[2],10)).padStart(2,"0");
       const now=new Date(); return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
     };
-    const fmtMonthInput = (ym)=> ym && /^\\d{4}-\\d{2}$/.test(ym) ? ym : "";
 
-    // ===== state =====
-    let selYmA = null, selYmB = null;
-    let unsubA = null, unsubB = null;
-    let records = []; // combined (dedup)
-    let viewMode = "ab"; // 'a' | 'ab' | 'b'
+    let selYmA=null, selYmB=null, unsubA=null, unsubB=null, records=[];
+    let viewMode="ab";
     const keyOf = (r)=> r._id ? ("id:"+r._id) : "ts:"+String(r.createdAt||"")+"|"+(r.name||"")+"|"+(r.price||"")+"|"+(r.weight||"")+"|"+(r.date||"");
     const dedup = (arr)=>{ const s=new Set(), out=[]; for(const r of arr||[]){ const k=keyOf(r); if(s.has(k)) continue; s.add(k); out.push(r);} return out; };
 
     function render(){
-      // sums by selected ym(s)
       const sumA = selYmA ? records.filter(r=> ymFromDateStr(r.date)===selYmA).reduce((s,r)=>s+(+r.bonus||0),0) : 0;
       const sumB = selYmB ? records.filter(r=> ymFromDateStr(r.date)===selYmB).reduce((s,r)=>s+(+r.bonus||0),0) : 0;
       set("sumA", Math.round(sumA)); set("sumB", Math.round(sumB));
@@ -148,34 +168,28 @@
       let list = records;
       if (viewMode === "a" && selYmA) list = records.filter(r=> ymFromDateStr(r.date)===selYmA);
       if (viewMode === "b" && selYmB) list = records.filter(r=> ymFromDateStr(r.date)===selYmB);
-      if (viewMode === "ab" && selYmA && selYmB) list = records.filter(r=> {
-        const ym = ymFromDateStr(r.date); return ym===selYmA || ym===selYmB;
-      });
+      if (viewMode === "ab" && selYmA && selYmB) list = records.filter(r=> [selYmA, selYmB].includes(ymFromDateStr(r.date)));
 
       let out = (viewMode==="ab"?"📘 合併 A+B：":(viewMode==="a"?"📘 僅 A：":"📘 僅 B："));
-      if (!list.length){ out += "\\n（尚無）"; }
-      else {
-        out += list.map((r,i)=>{
+      out += list.length? "" : "\\n（尚無）";
+      out += list.map((r,i)=>{
           const s = (r.date||""); const dateOnly = s.split(" ")[0] || s;
-          const line = `#${i+1} ${dateOnly}｜${r.name||""}｜${r.product||""}｜${r.weight}kg｜單${r.price}｜獎金${r.bonus}`;
-          return "\\n"+line;
-        }).join("");
-      }
+          return "\\n#" + (i+1) + " " + dateOnly + "｜" + (r.name||"") + "｜" + (r.product||"") + "｜" + r.weight + "kg｜單" + r.price + "｜獎金" + r.bonus;
+      }).join("");
       $("historyDisplay").textContent = out;
     }
 
-    function bindViewButtons(){
-      $("#viewA").onclick = ()=>{ viewMode="a"; $("#viewA").setAttribute("aria-pressed","true"); $("#viewAB").setAttribute("aria-pressed","false"); $("#viewB").setAttribute("aria-pressed","false"); render(); };
-      $("#viewAB").onclick = ()=>{ viewMode="ab"; $("#viewA").setAttribute("aria-pressed","false"); $("#viewAB").setAttribute("aria-pressed","true"); $("#viewB").setAttribute("aria-pressed","false"); render(); };
-      $("#viewB").onclick = ()=>{ viewMode="b"; $("#viewA").setAttribute("aria-pressed","false"); $("#viewAB").setAttribute("aria-pressed","false"); $("#viewB").setAttribute("aria-pressed","true"); render(); };
-    }
-
     async function loadOneMonth(ym, onCount){
-      const col = db.collection("profiles").doc("default").collection("months").doc(ym).collection("records").orderBy("createdAt","asc");
-      const snap = await col.get();
-      const arr = snap.docs.map(d=>Object.assign({_id:d.id}, d.data()));
-      if (typeof onCount==='function') onCount(arr.length);
-      return arr;
+      try{
+        const col = db.collection("profiles").doc("default").collection("months").doc(ym).collection("records").orderBy("createdAt","asc");
+        const snap = await col.get();
+        const arr = snap.docs.map(d=>Object.assign({_id:d.id}, d.data()));
+        if (typeof onCount==='function') onCount(arr.length);
+        return arr;
+      }catch(e){
+        log("讀取 "+ym+" 失敗：" + (e.message||e));
+        throw e;
+      }
     }
 
     function rebindRealtime(){
@@ -188,7 +202,7 @@
           records = dedup([...(selYmB? records.filter(r=> ymFromDateStr(r.date)!==selYmA):[]), ...arrA, ...(selYmB? records.filter(r=> ymFromDateStr(r.date)===selYmB):[])]);
           set("dbgCntA", String(arrA.length)); render();
           log("onSnapshot A 觸發，size="+s.size);
-        });
+        }, err=> log("onSnapshot A 錯誤："+(err.message||err)));
       }
       if (selYmB){
         const colB = db.collection("profiles").doc("default").collection("months").doc(selYmB).collection("records").orderBy("createdAt","asc");
@@ -197,7 +211,7 @@
           records = dedup([...(selYmA? records.filter(r=> ymFromDateStr(r.date)!==selYmB):[]), ...arrB, ...(selYmA? records.filter(r=> ymFromDateStr(r.date)===selYmA):[])]);
           set("dbgCntB", String(arrB.length)); render();
           log("onSnapshot B 觸發，size="+s.size);
-        });
+        }, err=> log("onSnapshot B 錯誤："+(err.message||err)));
       }
     }
 
@@ -220,111 +234,47 @@
         log(`initialPull 完成：A ${selYmA||"-"}、B ${selYmB||"-"}`);
       }catch(e){
         $("historyDisplay").textContent = "讀取失敗："+(e.message||e);
+        log("讀取失敗："+(e.message||e));
       }
     }
 
-    // ===== base price helpers =====
-    function pickBase(){
-      const fromInput = num($("#costPerKg") && $("#costPerKg").value);
-      if (fromInput !== null) return fromInput;
-      const urlBp = num(new URLSearchParams(location.search).get("bp"));
-      if (urlBp !== null) return urlBp;
-      const stored = num(localStorage.getItem("basePrice"));
-      if (stored !== null) return stored;
-      return null;
-    }
-    async function maybeFetchBaseFromCloud(){
-      const el = $("#costPerKg");
-      const has = el && el.value.trim() !== "";
-      const urlBp = new URLSearchParams(location.search).get("bp");
-      const localBp = localStorage.getItem("basePrice");
-      if (has || (urlBp && !isNaN(parseFloat(urlBp))) || (localBp && !isNaN(parseFloat(localBp)))) return;
-      try{
-        const snap = await db.collection("profiles").doc("default").collection("settings").doc("base").get();
-        if (snap.exists && isFinite(snap.data().basePrice)){
-          const v = Math.round(Number(snap.data().basePrice));
-          if (el && !el.value) el.value = String(v);
-          const disp = $("#basePriceDisplay"); if (disp) disp.innerText = String(v);
-          localStorage.setItem("basePrice", String(snap.data().basePrice));
-        }
-      }catch(e){}
-    }
-    function refreshBaseDisplay(){
-      const disp = $("#basePriceDisplay");
-      const v = pickBase();
-      disp.innerText = v !== null ? String(Math.round(v)) : "-";
+    function quickPrevNow(){
+      const now = new Date();
+      const ymNow = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+      const prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      const ymPrev = prev.getFullYear()+"-"+String(prev.getMonth()+1).padStart(2,"0");
+      $("#monthA").value = ymPrev;
+      $("#monthB").value = ymNow;
+      loadSelectedMonths();
     }
 
-    // ===== calc / export / delete =====
-    function calculateBonus(){
-      const actual = num($("#actualPrice").value);
-      const weight = num($("#actualWeight").value);
-      if (actual === null || weight === null || weight<=0) return alert("請輸入有效的成交單價與重量");
-      const cost = pickBase(); if (cost === null) return alert("請先輸入『成本(元/kg)』或回主頁計算底價");
-
-      const deduct = $("#homeDelivery").checked ? 250 : 0;
-      const addSelf = $("#selfDelivery").checked ? weight * 3 : 0;
-      const deductDriver = $("#companyDriver").checked ? weight * 3 : 0;
-      const addKHH = $("#kaohsiungLocal").checked ? 5 : 0;
-      const diff = actual - cost;
-      const bonus = diff > 0 ? diff * weight - deduct - deductDriver + addSelf + addKHH : 0;
-      $("#bonusResult").innerText = String(Math.round(bonus));
-
-      const __defDate = new Date().toLocaleString();
-      const __inDate = prompt("請輸入日期（可自行編輯，決定儲存到哪個月份）", __defDate);
-      const __dateStr = (__inDate && __inDate.trim()) ? __inDate.trim() : __defDate;
-      const ym = ymFromDateStr(__dateStr);
-
-      const rec = {date:__dateStr,name:$("#salesName").value.trim(),product:$("#productName").value.trim(),
-                   weight, price: actual, total: actual*weight, bonus: Math.round(bonus), createdAt: Date.now()};
-
-      db.collection("profiles").doc("default").collection("months").doc(ym).collection("records").add(rec).then(()=>{
-        log("已寫入 "+ym);
-      });
-
-      // 若剛好正在檢視該月份，直接推入前端
-      if ((selYmA && ym===selYmA) || (selYmB && ym===selYmB)){
-        records = dedup(records.concat([rec]));
-        render();
-      }
-    }
-
-    function exportCSV(){
-      let list = records.slice();
-      if (viewMode==="a" && selYmA) list = list.filter(r=> ymFromDateStr(r.date)===selYmA);
-      if (viewMode==="b" && selYmB) list = list.filter(r=> ymFromDateStr(r.date)===selYmB);
-      if (viewMode==="ab" && selYmA && selYmB) list = list.filter(r=> [selYmA, selYmB].includes(ymFromDateStr(r.date)));
-
-      let csv = "業務姓名,銷售品名,數量(kg),成交單價,總金額,獎金,日期\n";
-      list.forEach(r=> csv += `${r.name||""},${r.product||""},${r.weight},${r.price},${r.total||""},${r.bonus},${r.date}\n`);
-      const blob = new Blob(["\uFEFF"+csv], {type:"text/csv;charset=utf-8;"});
-      const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="業務獎金報表.csv"; a.click();
-    }
-
-    async function deletePicked(){
-      alert("此 v5 DEMO 暫不提供打勾刪除（避免跨月選擇時誤刪），之後可再加入『選取當前視圖全部刪除』的批次功能。");
-    }
-
-    // ===== init =====
-    firebase.auth().onAuthStateChanged(u=>{ set("dbgUid", u?u.uid:"（未登入）"); });
     document.addEventListener("DOMContentLoaded", ()=>{
       set("dbgProject", FIREBASE_CONFIG.projectId);
       const now = new Date();
       const ymNow = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
-      const ymPrev = (new Date(now.getFullYear(),now.getMonth()-1,1)).getFullYear()+"-"+String((new Date(now.getFullYear(),now.getMonth()-1,1)).getMonth()+1).padStart(2,"0");
+      const prev = new Date(now.getFullYear(),now.getMonth()-1,1);
+      const ymPrev = prev.getFullYear()+"-"+String(prev.getMonth()+1).padStart(2,"0");
       $("#monthA").value = ymPrev; $("#monthB").value = ymNow;
+
       $("#btnLoadMonths").onclick = loadSelectedMonths;
-      bindViewButtons();
-      ["btnCalc"].forEach(id=> $(id).onclick = calculateBonus);
-      ["btnExport"].forEach(id=> $(id).onclick = exportCSV);
-      ["btnDelPicked"].forEach(id=> $(id).onclick = deletePicked);
-      $("#costPerKg")?.addEventListener("input", ()=>{
-        const v = $("#costPerKg").value; const disp = $("#basePriceDisplay"); disp.textContent = v ? String(Math.round(parseFloat(v)||0)) : "-";
-        localStorage.setItem("basePrice", v);
+      $("#btnQuickNowPrev").onclick = quickPrevNow;
+      $("#monthA").addEventListener("change", loadSelectedMonths);
+      $("#monthB").addEventListener("change", loadSelectedMonths);
+
+      // view buttons
+      $("#viewA").onclick = ()=>{ viewMode="a"; $("#viewA").setAttribute("aria-pressed","true"); $("#viewAB").setAttribute("aria-pressed","false"); $("#viewB").setAttribute("aria-pressed","false"); render(); };
+      $("#viewAB").onclick = ()=>{ viewMode="ab"; $("#viewA").setAttribute("aria-pressed","false"); $("#viewAB").setAttribute("aria-pressed","true"); $("#viewB").setAttribute("aria-pressed","false"); render(); };
+      $("#viewB").onclick = ()=>{ viewMode="b"; $("#viewA").setAttribute("aria-pressed","false"); $("#viewAB").setAttribute("aria-pressed","false"); $("#viewB").setAttribute("aria-pressed","true"); render(); };
+
+      // price
+      const v0 = localStorage.getItem("basePrice"); if (v0){ document.getElementById("costPerKg").value = v0; document.getElementById("basePriceDisplay").textContent = String(Math.round(parseFloat(v0)||0)); }
+      document.getElementById("costPerKg").addEventListener("input", ()=>{
+        const v = document.getElementById("costPerKg").value; document.getElementById("basePriceDisplay").textContent = v ? String(Math.round(parseFloat(v)||0)) : "-"; localStorage.setItem("basePrice", v);
       });
-      const v0 = localStorage.getItem("basePrice"); if (v0) $("#costPerKg").value = v0;
-      (function(){ const v = localStorage.getItem("basePrice"); const disp = $("#basePriceDisplay"); if (v) disp.textContent = String(Math.round(parseFloat(v)||0)); })();
-      loadSelectedMonths();
+
+      // initial actions
+      ping();
+      quickPrevNow();
     });
   </script>
 </body>
