@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>📄 Bonus Records Viewer (Prev + Current)</title>
+<style>
+  body{font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif;background:#0f172a;color:#e5e7eb;margin:0}
+  .wrap{max-width:1100px;margin:0 auto;padding:16px}
+  h1{margin:0 0 10px;font-size:20px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button,select{padding:8px;border-radius:8px;border:1px solid #334155;background:#111827;color:#e5e7eb}
+  .card{background:#111827;border:1px solid #334155;border-radius:12px;padding:12px;margin-top:12px}
+  pre{white-space:pre-wrap;font:12px ui-monospace,Menlo,Consolas,monospace}
+  .tag{display:inline-block;padding:2px 8px;border:1px solid #334155;border-radius:999px;margin-right:6px}
+  .ok{background:#065f46} .warn{background:#92400e} .bad{background:#7f1d1d}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📄 Bonus Records Viewer（本月＋上月）</h1>
+  <div class="row">
+    <span class="tag">切換專案：</span>
+    <button id="useSales">sales-bonusrecord</button>
+    <button id="useContacts">contacts-sphere</button>
+    <button id="btnInit" class="ok">初始化 & 匿名登入</button>
+    <button id="btnLoad" class="warn">讀取本月＋上月</button>
+  </div>
+  <div class="card">
+    <div>目前設定：</div>
+    <pre id="cfg"></pre>
+    <div>狀態：</div>
+    <pre id="state"></pre>
+  </div>
+  <div class="card">
+    <div>本月（YYYY-MM）：<span id="ymNow"></span>｜筆數：<span id="cntNow">0</span></div>
+    <pre id="listNow"></pre>
+  </div>
+  <div class="card">
+    <div>上月（YYYY-MM）：<span id="ymPrev"></span>｜筆數：<span id="cntPrev">0</span></div>
+    <pre id="listPrev"></pre>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+<script>
+let CURRENT = "sales";
+const CFGS = {
+  sales: {
+    apiKey:"AIzaSyBw4SbJMjNxoj6P9Zwi4SAlSIi30A8uAp4",
+    authDomain:"sales-bonusrecord.firebaseapp.com",
+    projectId:"sales-bonusrecord",
+    storageBucket:"sales-bonusrecord.firebasestorage.app",
+    messagingSenderId:"679798751240",
+    appId:"1:679798751240:web:0ed7b227af33e0122fd1bd",
+    measurementId:"G-WFSZG479WS"
+  },
+  contacts: {
+    apiKey:"AIzaSyBfGL-GcBiTDANBbPxsbAPSn42gqkQAn4M",
+    authDomain:"contacts-sphere.firebaseapp.com",
+    projectId:"contacts-sphere",
+    storageBucket:"contacts-sphere.firebasestorage.app",
+    messagingSenderId:"612743466240",
+    appId:"1:612743466240:web:72235bb15559d3297f77e5",
+    measurementId:"G-HB4GEF8JMM"
+  }
+};
+function showCfg(){ cfg.textContent = JSON.stringify(CFGS[CURRENT], null, 2); }
+showCfg();
+
+useSales.onclick = ()=>{ CURRENT="sales"; showCfg(); };
+useContacts.onclick = ()=>{ CURRENT="contacts"; showCfg(); };
+
+let db=null;
+btnInit.onclick = async ()=>{
+  state.textContent = "初始化中…";
+  try{ if (firebase.apps.length){ firebase.apps.forEach(a=>a.delete()); } }catch(e){}
+  firebase.initializeApp(CFGS[CURRENT]);
+  db = firebase.firestore();
+  try{ await db.enablePersistence({synchronizeTabs:true}); }catch(e){}
+  try{
+    await firebase.auth().signInAnonymously();
+    state.textContent = "匿名登入已送出…";
+  }catch(e){ state.textContent = "匿名登入失敗："+e.code+" "+e.message; }
+  firebase.auth().onAuthStateChanged(u=>{
+    state.textContent += "\\nAuth: "+(u?("UID="+u.uid):"未登入");
+  });
+};
+
+function ymKey(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function recFmt(r){
+  const d = (r.date||"").split(" ")[0];
+  return `${d}｜${r.name||""}｜${r.product||""}｜${r.weight}kg｜單${r.price}｜獎金${r.bonus}`;
+}
+async function loadMonth(ym){
+  const out = {ym, cnt:0, list:[], err:null};
+  try{
+    const q = await db.collection("profiles").doc("default").collection("months").doc(ym).collection("records").orderBy("createdAt","asc").get();
+    out.cnt = q.size;
+    q.forEach(doc=> out.list.push(recFmt(doc.data())));
+  }catch(e){
+    out.err = `${e.code||""} ${e.message||e}`;
+  }
+  return out;
+}
+
+btnLoad.onclick = async ()=>{
+  if (!db){ state.textContent += "\\n請先初始化"; return; }
+  const now = new Date();
+  const ymN = ymKey(now);
+  const ymP = ymKey(new Date(now.getFullYear(), now.getMonth()-1, 1));
+  ymNow.textContent = ymN; ymPrev.textContent = ymP;
+  listNow.textContent = "讀取中…"; listPrev.textContent = "讀取中…";
+  const rN = await loadMonth(ymN);
+  const rP = await loadMonth(ymP);
+  cntNow.textContent = rN.cnt;
+  cntPrev.textContent = rP.cnt;
+  listNow.textContent = rN.err ? ("錯誤："+rN.err) : (rN.list.slice(0,50).join("\\n"));
+  listPrev.textContent = rP.err ? ("錯誤："+rP.err) : (rP.list.slice(0,50).join("\\n"));
+};
+</script>
+</body>
+</html>
