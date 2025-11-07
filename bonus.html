@@ -369,5 +369,65 @@
       $("#btnDelPicked").onclick = ()=> alert("批次刪除將於下一版提供（避免跨月誤刪）。");
     });
   </script>
+
+<!-- Robust delayed init (v4) -->
+<script>
+(function(){
+  function logDbg(msg){
+    try{
+      const box = document.getElementById("debugBox") || document.createElement("div");
+      if(!box.id){ box.id="debugBox"; box.style="position:fixed;right:8px;bottom:8px;background:#111;color:#0f0;padding:8px 10px;border-radius:6px;font:12px/1.4 monospace;max-width:48vw;z-index:9999;opacity:.95"; document.body.appendChild(box); }
+      const p = document.createElement("div"); p.textContent = msg; box.appendChild(p);
+      console.log("[bonus v4]", msg);
+    }catch(e){}
+  }
+  function ready(fn){ if(document.readyState!=="loading") fn(); else document.addEventListener("DOMContentLoaded", fn); }
+  function waitForFirebase(maxMs){
+    return new Promise((resolve,reject)=>{
+      const t0 = Date.now();
+      (function tick(){
+        if (window.firebase && firebase.apps) return resolve();
+        if (Date.now()-t0 > (maxMs||8000)) return reject(new Error("Firebase SDK not loaded within time"));
+        return setTimeout(tick, 50);
+      })();
+    });
+  }
+  ready(async function(){
+    try{
+      await waitForFirebase(8000);
+      logDbg("SDK loaded");
+      if (!firebase.apps.length){
+        logDbg("Initializing app ...");
+      }
+      try {
+        const pid = firebase.app().options.projectId || "(unknown)";
+        if (typeof set === "function") set("dbgPid", pid);
+        logDbg("projectId="+pid);
+      } catch(e){ logDbg("projectId read failed: "+e.message); }
+
+      if (firebase.auth){
+        firebase.auth().onAuthStateChanged((u)=>{
+          if (typeof set === "function") set("dbgUid", u?u.uid:"（未登入）");
+          logDbg("auth state: "+(u?u.uid:"no user"));
+          if (u){
+            try { if (typeof ping === "function") ping(); } catch(e){}
+            try { if (typeof quickPrevNow === "function") quickPrevNow(); } catch(e){}
+          }
+        });
+        firebase.auth().signInAnonymously().catch((e)=>{
+          logDbg("signIn error: "+e.message);
+          alert("匿名登入失敗："+e.message+"\n請到 Firebase Console 啟用 Anonymous Sign-in。");
+        });
+      } else {
+        logDbg("firebase.auth not available");
+      }
+    } catch(e){
+      logDbg("Init failed: "+e.message);
+      alert("初始化失敗："+e.message+"\n請檢查網路、Firebase SDK 是否可載入。");
+    }
+  });
+})();
+</script>
+
 </body>
 </html>
