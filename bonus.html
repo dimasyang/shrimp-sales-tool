@@ -32,7 +32,7 @@
     .err{color:#b91c1c;font-weight:600}
   </style>
 
-<!-- Firebase SDK (compat) + config (injected) -->
+<!-- Firebase SDK (compat) + config (v7) -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -81,8 +81,7 @@
         <label><span>銷售品名</span><input id="productName" type="text" placeholder="可留空"/></label>
         <label><span>成交重量 (kg)</span><input id="actualWeight" type="number" placeholder="0" step="0.01"/></label>
         <label><span>成交單價 (元/kg)</span><input id="actualPrice" type="number" placeholder="0" step="0.01"/></label>
-        <label><span>成本 (元/kg)</span>\1
-<div class="mini">成本參考：<span id="basePriceDisplay">-</span></div></label>
+        <label><span>成本 (元/kg)</span><input id="costPerKg" type="number" placeholder="自動帶入，可手動修改" step="0.01"/></label>
         <label><span>此筆「交易日期」（決定歸屬月份）</span><input id="recordDate" type="date"/></label>
       </div>
 
@@ -358,66 +357,143 @@
     });
   </script>
 
-<!-- Robust init + bindings (v6) -->
+<!-- v7 robust month loader + safe overrides -->
 <script>
 (function(){
-  function setTxt(id,v){ var el=document.getElementById(id); if(el) el.textContent=String(v); }
-  function wait(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
+  function logDbg(msg){
+    try{
+      const box = document.getElementById("debugBox") || document.createElement("div");
+      if(!box.id){
+        box.id="debugBox";
+        box.style="position:fixed;right:8px;bottom:8px;background:#111;color:#0f0;padding:8px 10px;border-radius:6px;font:12px/1.4 monospace;max-width:48vw;z-index:9999;opacity:.95";
+        document.body.appendChild(box);
+      }
+      const p = document.createElement("div"); p.textContent = msg; box.appendChild(p);
+      console.log("[bonus v7]", msg);
+    }catch(e){}
+  }
+  function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
   async function ensureDb(){
-    var tries=0;
+    let tries=0;
     while(!(window.firebase) && tries<200){ await wait(50); tries++; }
     if (!firebase) throw new Error("Firebase SDK not loaded");
     if (!window.db) window.db = firebase.firestore();
     return window.db;
   }
-  async function countYm(ym){
-    var d=await ensureDb();
-    var snap=await d.collection('profiles').doc('default').collection('months').doc(ym).collection('records').get();
+  function normYM(s){
+    const m = String(s||'').match(/(\d{4}).*?(\d{1,2})/);
+    return m ? (m[1] + "-" + String(m[2]).padStart(2,'0')) : null;
+  }
+  function detectMonthInputs(){
+    // 依版面寬度由左到右找兩個像月份的輸入
+    const list = Array.from(document.querySelectorAll('input, .flatpickr-input'));
+    const cands = list.filter(el => /年|月|\d{4}[-/]\d{1,2}/.test((el.value||el.placeholder||'')));
+    cands.sort((a,b)=>a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+    return [cands[0] || null, cands[1] || null];
+  }
+  function getYMFromInputs(index){
+    const [a,b] = detectMonthInputs();
+    const el = index===0 ? a : b;
+    return normYM(el ? (el.value || el.getAttribute('value') || el.placeholder || '') : '');
+  }
+  async function readMonthCount(ym){
+    if(!ym) return 0;
+    const d = await ensureDb();
+    const snap = await d.collection('profiles').doc('default').collection('months').doc(ym).collection('records').get();
     return snap.size||0;
   }
-  async function fallbackLoad(){
-    var a=(document.getElementById('monthA')&&document.getElementById('monthA').value||'').replace(/\//g,'-');
-    var b=(document.getElementById('monthB')&&document.getElementById('monthB').value||'').replace(/\//g,'-');
-    var ca=0, cb=0;
-    if(/^\d{4}-\d{2}$/.test(a)) ca=await countYm(a);
-    if(/^\d{4}-\d{2}$/.test(b)) cb=await countYm(b);
-    var status=document.querySelector('[data-role="statusAB"]')||document.createElement('div');
-    status.dataset.role="statusAB";
-    status.style="position:fixed;left:8px;top:8px;background:#005;padding:6px 8px;color:#fff;border-radius:6px;font:12px monospace;z-index:9999;opacity:.9";
-    status.textContent="A("+ (a||'-') +")="+ca+"；B("+ (b||'-') +")="+cb;
-    if(!status.parentNode) document.body.appendChild(status);
+  async function fallbackLoadSelected(){
+    try{
+      const A = getYMFromInputs(0);
+      const B = getYMFromInputs(1);
+      const [ca, cb] = await Promise.all([readMonthCount(A), readMonthCount(B)]);
+      logDbg("fallback A("+ (A||'-') +")="+ca+" B("+ (B||'-') +")="+cb);
+      const stat = document.querySelector('[data-role="statusAB"]') || document.createElement('div');
+      stat.dataset.role = "statusAB";
+      stat.style = "position:fixed;left:8px;top:8px;background:#005;padding:6px 8px;color:#fff;border-radius:6px;font:12px monospace;z-index:9999;opacity:.9";
+      stat.textContent = "A("+ (A||'-') +")="+ca+"；B("+ (B||'-') +")="+cb;
+      if(!stat.parentNode) document.body.appendChild(stat);
+    }catch(e){
+      alert("載入月份資料失敗：\n"+e.message);
+      console.error(e);
+    }
   }
-  function bindUI(){
-    Array.prototype.forEach.call(document.querySelectorAll('button,input[type="button"]'), function(b){
-      var t=(b.textContent||b.value||'').trim();
+  // 保存原函式
+  const _origLoad = window.loadSelectedMonths;
+  const _origQuick = window.quickPrevNow;
+  // 覆寫為保底版本
+  window.loadSelectedMonths = async function(){
+    try{
+      if (typeof _origLoad === 'function'){
+        await _origLoad();
+      }else{
+        await fallbackLoadSelected();
+      }
+    }catch(e){
+      logDbg("orig loadSelectedMonths failed: "+e.message);
+      await fallbackLoadSelected();
+    }
+  };
+  window.quickPrevNow = async function(){
+    try{
+      if (typeof _origQuick === 'function'){
+        await _origQuick();
+        return;
+      }
+    }catch(e){ logDbg("orig quickPrevNow failed: "+e.message); }
+    // 若沒有原函式：以今天自動判定本月/上月直接讀筆數
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth()+1;
+    const thisYM = y + "-" + String(m).padStart(2,'0');
+    const pm = (m===1) ? 12 : (m-1);
+    const py = (m===1) ? (y-1) : y;
+    const prevYM = py + "-" + String(pm).padStart(2,'0');
+    const [ca, cb] = await Promise.all([readMonthCount(thisYM), readMonthCount(prevYM)]);
+    logDbg("quickPrevNow fallback A("+thisYM+")="+ca+" B("+prevYM+")="+cb);
+    const stat = document.querySelector('[data-role="statusAB"]') || document.createElement('div');
+    stat.dataset.role = "statusAB";
+    stat.style = "position:fixed;left:8px;top:8px;background:#005;padding:6px 8px;color:#fff;border-radius:6px;font:12px monospace;z-index:9999;opacity:.9";
+    stat.textContent = "A("+ thisYM +")="+ca+"；B("+ prevYM +")="+cb;
+    if(!stat.parentNode) document.body.appendChild(stat);
+  };
+  // 綁定按鈕
+  function bindButtons(){
+    const btns = Array.from(document.querySelectorAll('button,input[type="button"]'));
+    btns.forEach(btn=>{
+      const t = (btn.textContent||btn.value||'').trim();
       if(/載入所選月份/.test(t)){
-        b.addEventListener('click', function(){ if (typeof loadSelectedMonths==='function') loadSelectedMonths(); else fallbackLoad(); });
+        btn.addEventListener('click', ()=>window.loadSelectedMonths());
       }
       if(/一鍵載入/.test(t) || /本月＋上月/.test(t)){
-        b.addEventListener('click', function(){ if (typeof quickPrevNow==='function') quickPrevNow(); else fallbackLoad(); });
+        btn.addEventListener('click', ()=>window.quickPrevNow());
       }
     });
-    ['monthA','monthB'].forEach(function(id){
-      var el=document.getElementById(id);
-      if (el) el.addEventListener('change', function(){ if (typeof loadSelectedMonths==='function') loadSelectedMonths(); else fallbackLoad(); });
-    });
+    logDbg("buttons bound ("+btns.length+")");
   }
-  document.addEventListener('DOMContentLoaded', async function(){
+  document.addEventListener('DOMContentLoaded', async ()=>{
     try{
       await ensureDb();
-      bindUI();
+      bindButtons();
       if (firebase && firebase.auth){
         firebase.auth().onAuthStateChanged(async function(u){
-          setTxt('dbgUid', u?u.uid:'（未登入）');
-          if (u){
-            try { if (typeof ping==='function') await ping(); } catch(e){}
-            try { if (typeof quickPrevNow==='function') quickPrevNow(); } catch(e){}
+          logDbg("auth state: "+(u?u.uid:'no user'));
+          if (!u){
+            try{ await firebase.auth().signInAnonymously(); }catch(e){ logDbg("signIn error: "+e.message); }
+          }else{
+            // 自動跑一次快載
+            try{ await window.quickPrevNow(); }catch(e){}
           }
         });
-        try{ await firebase.auth().signInAnonymously(); }catch(e){}
       }
-      try{ setTxt('dbgPid', firebase.app().options.projectId||'-'); }catch(e){}
-    }catch(e){ console.error(e); }
+      // 顯示 projectId
+      try{
+        const pid = firebase.app().options.projectId || '-';
+        logDbg("projectId="+pid);
+      }catch(e){}
+    }catch(e){
+      logDbg("init error: "+e.message);
+    }
   });
 })();
 </script>
