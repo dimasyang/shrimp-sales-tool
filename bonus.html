@@ -51,6 +51,13 @@
 
 </head>
 <body>
+
+<!-- v7a hidden anchors for legacy scripts -->
+<div id="legacy-month-anchors" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;">
+  <input type="text" id="monthA" value="" />
+  <input type="text" id="monthB" value="" />
+</div>
+
   <div class="container">
     <h1>💼 業務獎金計算</h1>
     <p class="lead">依「輸入日期」歸檔到對應月份；支援兩個月份載入、合併/單月檢視、CSV 匯出。</p>
@@ -494,6 +501,69 @@
     }catch(e){
       logDbg("init error: "+e.message);
     }
+  });
+})();
+</script>
+
+
+<!-- v7a sync visible months to hidden #monthA/#monthB and add test-write -->
+<script>
+(function(){
+  function normYM(s){
+    var m = String(s||'').match(/(\d{4}).*?(\d{1,2})/);
+    return m ? (m[1] + "-" + String(m[2]).padStart(2,'0')) : "";
+  }
+  function detectMonthInputs(){
+    var list = Array.prototype.slice.call(document.querySelectorAll('input, .flatpickr-input'));
+    var cands = list.filter(function(el){ return /(年|月|\d{4}[-/]\d{1,2})/.test((el.value||el.placeholder||'')); });
+    cands.sort(function(a,b){ return a.getBoundingClientRect().left - b.getBoundingClientRect().left; });
+    return [cands[0]||null, cands[1]||null];
+  }
+  function syncHidden(){
+    try{
+      var a = document.getElementById('monthA');
+      var b = document.getElementById('monthB');
+      var vis = detectMonthInputs();
+      var va = vis[0] ? (vis[0].value || vis[0].placeholder || '') : '';
+      var vb = vis[1] ? (vis[1].value || vis[1].placeholder || '') : '';
+      if (a) a.value = normYM(va);
+      if (b) b.value = normYM(vb);
+    }catch(e){}
+  }
+  document.addEventListener('input', function(e){ if(e.target && (e.target.matches('input')||e.target.classList.contains('flatpickr-input'))) syncHidden(); }, true);
+  document.addEventListener('change', function(){ syncHidden(); }, true);
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(syncHidden, 600); });
+})();
+</script>
+
+
+<!-- v7a: floating test-write button -->
+<div id="testWriteBtn" style="position:fixed;right:12px;bottom:12px;padding:8px 10px;background:#0a0;color:#fff;border-radius:8px;font:12px/1.2 sans-serif;cursor:pointer;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.2)">一鍵測試寫入</div>
+<script>
+(function(){
+  async function testWrite(){
+    try{
+      const db = (window.db || firebase.firestore());
+      const now = new Date();
+      const ym = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,'0');
+      const ref = db.collection('profiles').doc('default').collection('months').doc(ym).collection('records');
+      const payload = {
+        createdAt: Date.now(),
+        note: 'TEST-WRITE from v7a',
+        qty: 1,
+        pricePerKg: 0,
+        seller: 'TEST'
+      };
+      const docRef = await ref.add(payload);
+      alert('寫入成功：' + ym + ' / ' + docRef.id);
+    }catch(e){
+      alert('寫入失敗：' + e.message);
+      console.error(e);
+    }
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    var btn = document.getElementById('testWriteBtn');
+    if (btn) btn.addEventListener('click', testWrite);
   });
 })();
 </script>
