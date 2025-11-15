@@ -1,128 +1,56 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<script>var db;</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>💼 業務獎金計算（v5e｜依輸入日期歸檔）</title>
+  <title>💼 業務獎金計算（雲端版：Firestore＋本機備援）</title>
   <style>
     :root{--bg:#f5f5f5;--card:#fff;--bd:#ddd;--muted:#666;--brand:#4f8cff;--brand2:#7aa2ff}
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif;color:#222}
-    .container{max-width:1000px;margin:0 auto;padding:16px 16px 120px}
-    h1{margin:0 0 8px}.lead{color:#374151;margin:0 0 8px}
-    small.hint{color:#6b7280}
-    .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px}
-    .grid{display:grid;gap:12px;grid-template-columns:1fr} @media(min-width:740px){.grid{grid-template-columns:repeat(2,1fr)}}
-    input:not([type=checkbox]):not([type=radio]),button,a.btn,select{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:#fff}
-    label span{display:block;font-size:12px;color:#475569;margin-bottom:6px}
-    .btn{cursor:pointer;background:#f3f4f6;text-align:center;text-decoration:none}
-    .btn.primary{background:linear-gradient(180deg,var(--brand2),var(--brand));color:#fff;border:none;font-weight:600}
-    .btn.ok{background:#e8f7ee;border-color:#c6f1d8;color:#146c43}
-    .btn.danger{background:#fde2e2;border-color:#f5c2c7;color:#842029}
-    .actions{display:grid;gap:10px;grid-template-columns:1fr 1fr} @media(min-width:640px){.actions{grid-template-columns:repeat(4,1fr)}}
-    .table{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:12px}
-    pre{white-space:pre-wrap}
-    .seg{display:inline-grid;grid-auto-flow:column;gap:6px;background:#eef2ff;border:1px solid #c7d2fe;padding:6px;border-radius:999px}
-    .seg button{border:none;background:transparent;padding:6px 12px;border-radius:999px;cursor:pointer}
-    .seg button[aria-pressed="true"]{background:#4f46e5;color:#fff}
-    .dbg-footer{position:fixed;left:12px;bottom:12px;z-index:9999;background:rgba(17,24,39,.95);color:#e5e7eb;padding:10px 12px;border-radius:12px;border:1px solid #374151;max-width:90vw;font:12px ui-monospace,Menlo,Consolas,monospace}
-    .dbg-footer .k{color:#93c5fd}.dbg-footer .v{color:#86efac}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .mini{font-size:12px;color:#6b7280}
-    .err{color:#b91c1c;font-weight:600}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);font-family:-apple-system,system-ui,"Microsoft JhengHei",sans-serif;color:#111}
+    .container{max-width:1000px;margin:0 auto;padding:16px 16px 80px}
+    h1{margin:0 0 4px}
+    .lead{margin:0 0 12px;color:#374151;font-size:14px}
+    .card{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:16px;margin-top:12px}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:720px){
+      .grid-2{grid-template-columns:repeat(2,1fr)}
+      .grid-3{grid-template-columns:repeat(3,1fr)}
+      .grid-4{grid-template-columns:repeat(4,1fr)}
+    }
+    label span{display:block;font-size:12px;color:#4b5563;margin-bottom:4px}
+    input:not([type=checkbox]),button,select{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--bd);font-size:14px}
+    button{cursor:pointer;background:#f3f4f6}
+    button.primary{background:linear-gradient(180deg,var(--brand2),var(--brand));color:#fff;border:none;font-weight:600}
+    button.ok{background:#e8f7ee;border-color:#c6f1d8;color:#146c43}
+    button.danger{background:#fde2e2;border-color:#f5c2c7;color:#842029}
+    .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .row > *{flex:1 1 auto}
+    .mini{font-size:12px;color:#6b7280;margin-top:4px}
+    .strong{font-weight:600}
+    .actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+    @media(max-width:600px){.actions{grid-template-columns:1fr}}
+    #bonusResult{font-size:20px;font-weight:700;color:#b91c1c}
+    .table-wrap{margin-top:10px;border:1px solid #e5e7eb;border-radius:10px;overflow:auto;max-height:420px}
+    table{border-collapse:separate;border-spacing:0;width:100%;min-width:720px}
+    thead th{position:sticky;top:0;background:#fafafa;border-bottom:1px solid #e5e7eb;padding:8px 10px;font-size:13px;text-align:left}
+    tbody td{border-bottom:1px solid #f3f4f6;padding:6px 10px;font-size:13px;white-space:nowrap}
+    tbody tr:nth-child(odd){background:#fcfcfc}
+    #status{font-size:12px;margin-top:4px}
+    #status.ok{color:#16a34a}
+    #status.err{color:#b91c1c}
+    #mode{font-size:12px;margin-top:2px;color:#4b5563}
+    #loadStatus{font-size:12px;margin-top:2px;color:#4b5563}
   </style>
 
-<!-- Firebase SDK (compat) + config (v7) -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script>
-  const firebaseConfig = {
-    apiKey: "AIzaSyBw4SbJMjNxoj6P9Zwi4SAlSIi30A8uAp4",
-    authDomain: "sales-bonusrecord.firebaseapp.com",
-    projectId: "sales-bonusrecord",
-    storageBucket: "sales-bonusrecord.firebasestorage.app",
-    messagingSenderId: "679798751240",
-    appId: "1:679798751240:web:0ed7b227af33e0122fd1bd",
-    measurementId: "G-WFSZG479WS"
-  };
-  if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
-</script>
+  <!-- Firebase compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
-</head>
-<body>
-
-<!-- v7a hidden anchors for legacy scripts -->
-<div id="legacy-month-anchors" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;">
-  <input type="text" id="monthA" value="" />
-  <input type="text" id="monthB" value="" />
-</div>
-
-  <div class="container">
-    <h1>💼 業務獎金計算</h1>
-    <p class="lead">依「輸入日期」歸檔到對應月份；支援兩個月份載入、合併/單月檢視、CSV 匯出。</p>
-
-    <!-- 月份控制 -->
-    <section class="card">
-      <div class="row">
-        <label><span>月份 A</span><input id="monthA" type="month" /></label>
-        <label><span>月份 B（可留空）</span><input id="monthB" type="month" /></label>
-        <button class="btn primary" id="btnLoadMonths" style="width:auto;">載入所選月份</button>
-        <button class="btn" id="btnQuickNowPrev" style="width:auto;">一鍵載入：本月＋上月</button>
-        <div class="seg" role="tablist">
-          <button id="viewA" role="tab" aria-pressed="false">僅 A</button>
-          <button id="viewAB" role="tab" aria-pressed="true">合併 A+B</button>
-          <button id="viewB" role="tab" aria-pressed="false">僅 B</button>
-        </div>
-      </div>
-      <div class="mini"><strong>狀態：</strong><span id="ping" class="err"></span></div>
-      <div style="margin-top:8px;font-weight:600;color:#374151;">
-        A 月：<span id="sumA">0</span> 元｜B 月：<span id="sumB">0</span> 元
-      </div>
-    </section>
-
-    <!-- 交易輸入 -->
-    <section class="card" style="margin-top:12px">
-      <div class="grid">
-        <label><span>業務姓名</span><input id="salesName" type="text" placeholder="可留空"/></label>
-        <label><span>銷售品名</span><input id="productName" type="text" placeholder="可留空"/></label>
-        <label><span>成交重量 (kg)</span><input id="actualWeight" type="number" placeholder="0" step="0.01"/></label>
-        <label><span>成交單價 (元/kg)</span><input id="actualPrice" type="number" placeholder="0" step="0.01"/></label>
-        <label><span>成本 (元/kg)</span><input id="costPerKg" type="number" placeholder="自動帶入，可手動修改" step="0.01"/></label>
-        <label><span>此筆「交易日期」（決定歸屬月份）</span><input id="recordDate" type="date"/></label>
-      </div>
-
-      <div class="grid" style="grid-template-columns:1fr 1fr 1fr 1fr;">
-        <label><input type="checkbox" id="homeDelivery"/> 宅配（扣250元）</label>
-        <label><input type="checkbox" id="selfDelivery"/> 自行配送（每公斤加3元）</label>
-        <label><input type="checkbox" id="companyDriver"/> 公司司機（每公斤扣3元）</label>
-        <label><input type="checkbox" id="kaohsiungLocal"/> 高雄市區公司車（整筆 +5 元）</label>
-      </div>
-
-      <div class="actions">
-        <button class="btn primary" id="btnCalc">計算並儲存</button>
-        <button class="btn ok" id="btnExport">匯出 CSV</button>
-        <a class="btn primary" href="./index.html">返回主頁</a>
-        <button class="btn danger" id="btnDelPicked">刪除選取紀錄（之後提供）</button>
-      </div>
-
-      <p class="em">本次獎金：<span id="bonusResult">0</span> 元</p>
-
-      <div class="table">
-        <strong>紀錄列表</strong>
-        <pre id="historyDisplay"></pre>
-      </div>
-    </section>
-  </div>
-
-  <!-- Debug footer -->
-  <div class="dbg-footer" id="dbgFoot">
-    <div><span class="k">projectId</span>: <span class="v" id="dbgProject">—</span> ｜ <span class="k">UID</span>: <span class="v" id="dbgUid">—</span></div>
-    <div><span class="k">A</span>: <span class="v" id="dbgYmA">—</span>（<span class="k">count</span>: <span class="v" id="dbgCntA">0</span>） ｜ <span class="k">B</span>: <span class="v" id="dbgYmB">—</span>（<span class="k">count</span>: <span class="v" id="dbgCntB">0</span>）</div>
-    <div id="dbgLog" style="margin-top:6px;white-space:pre-wrap"></div>
-  </div>
   <script>
-    const FIREBASE_CONFIG = {
+    // Firestore 專案設定（跟你原本的一樣）
+    const firebaseConfig = {
       apiKey: "AIzaSyBw4SbJMjNxoj6P9Zwi4SAlSIi30A8uAp4",
       authDomain: "sales-bonusrecord.firebaseapp.com",
       projectId: "sales-bonusrecord",
@@ -131,442 +59,326 @@
       appId: "1:679798751240:web:0ed7b227af33e0122fd1bd",
       measurementId: "G-WFSZG479WS"
     };
-    firebase.initializeApp(FIREBASE_CONFIG);
-    db = firebase.firestore();
-    try { db.enablePersistence({synchronizeTabs:true}); } catch(e){}
-    firebase.auth().signInAnonymously().catch(()=>{});
 
-    const $ = id=>document.getElementById(id);
-    const set = (id, v)=>{ const el=$(id); if(el) el.textContent = v; };
-    const log = (m)=>{ const el=$("dbgLog"); el.textContent += m + "\\n"; };
-    const pingEl = ()=> document.getElementById("ping");
+    let db = null;
+    let useFirestore = false; // true = 寫入雲端, false = 只用本機
 
-    firebase.auth().onAuthStateChanged(u=>{
-      set("dbgUid", u?u.uid:"（未登入）");
-    });
+    function initFirebaseSafe() {
+      try {
+        if (typeof firebase === "undefined") {
+          console.warn("Firebase SDK 未載入，改用本機模式");
+          useFirestore = false;
+          return;
+        }
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.firestore();
+        useFirestore = true;
 
-    // quick ping to verify connectivity
-    async function ping(){
-      try{
-        await db.collection("profiles").doc("default").get();
-        pingEl().textContent = "已連線";
-        pingEl().classList.remove("err");
-      }catch(e){
-        pingEl().textContent = "連線/權限錯誤：" + (e.message||e);
-        pingEl().classList.add("err");
-        log("ping 錯誤：" + (e.message||e));
-      }
-    }
-
-    // helpers
-    function fmtMonthInput(ym){
-      if (!ym) return "";
-      const m = ym.match(/^(\\d{4})-(\\d{1,2})$/);
-      if (!m) return "";
-      const mm = String(parseInt(m[2],10)).padStart(2,"0");
-      return m[1] + "-" + mm;
-    }
-    function ymFromDateInput(dateStr){
-      // expects YYYY-MM-DD; tolerant to YYYY/M/D
-      if(!dateStr) return "";
-      const m = dateStr.match(/(\\d{4})[\\/\\-](\\d{1,2})/);
-      if(!m) return "";
-      return m[1]+"-"+String(parseInt(m[2],10)).padStart(2,"0");
-    }
-
-    let selYmA=null, selYmB=null, unsubA=null, unsubB=null, records=[];
-    let viewMode="ab";
-    const keyOf = (r)=> r._id ? ("id:"+r._id) : "ts:"+String(r.createdAt||"")+"|"+(r.name||"")+"|"+(r.price||"")+"|"+(r.weight||"")+"|"+(r.date||"");
-    const dedup = (arr)=>{ const s=new Set(), out=[]; for(const r of arr||[]){ const k=keyOf(r); if(s.has(k)) continue; s.add(k); out.push(r);} return out; };
-
-    function render(){
-      const toYm = (r)=> ymFromDateInput(r.date?.split(' ')[0]||r.date);
-      const sumA = selYmA ? records.filter(r=> toYm(r)===selYmA).reduce((s,r)=>s+(+r.bonus||0),0) : 0;
-      const sumB = selYmB ? records.filter(r=> toYm(r)===selYmB).reduce((s,r)=>s+(+r.bonus||0),0) : 0;
-      set("sumA", Math.round(sumA)); set("sumB", Math.round(sumB));
-
-      set("dbgYmA", selYmA || "—"); set("dbgYmB", selYmB || "—");
-      set("dbgCntA", selYmA ? String(records.filter(r=> toYm(r)===selYmA).length) : "0");
-      set("dbgCntB", selYmB ? String(records.filter(r=> toYm(r)===selYmB).length) : "0");
-
-      let list = records;
-      if (viewMode === "a" && selYmA) list = records.filter(r=> toYm(r)===selYmA);
-      if (viewMode === "b" && selYmB) list = records.filter(r=> toYm(r)===selYmB);
-      if (viewMode === "ab" && selYmA && selYmB) list = records.filter(r=> [selYmA, selYmB].includes(toYm(r)));
-
-      let out = (viewMode==="ab"?"📘 合併 A+B：":(viewMode==="a"?"📘 僅 A：":"📘 僅 B："));
-      out += list.length? "" : "\\n（尚無）";
-      out += list.map((r,i)=>{
-          const s = (r.date||""); const dateOnly = s.split(" ")[0] || s;
-          return "\\n#" + (i+1) + " " + dateOnly + "｜" + (r.name||"") + "｜" + (r.product||"") + "｜" + r.weight + "kg｜單" + r.price + "｜獎金" + r.bonus;
-      }).join("");
-      $("historyDisplay").textContent = out;
-    }
-
-    async function loadOneMonth(ym, onCount){
-      try{
-        const col = db.collection("profiles").doc("default").collection("months").doc(ym).collection("records").orderBy("createdAt","asc");
-        const snap = await col.get();
-        const arr = snap.docs.map(d=>Object.assign({_id:d.id}, d.data()));
-        if (typeof onCount==='function') onCount(arr.length);
-        return arr;
-      }catch(e){
-        log("讀取 "+ym+" 失敗：" + (e.message||e));
-        throw e;
-      }
-    }
-
-    function rebindRealtime(){
-      if (unsubA){ unsubA(); unsubA=null; }
-      if (unsubB){ unsubB(); unsubB=null; }
-      const toYm = (r)=> ymFromDateInput(r.date?.split(' ')[0]||r.date);
-      if (selYmA){
-        const colA = db.collection("profiles").doc("default").collection("months").doc(selYmA).collection("records").orderBy("createdAt","asc");
-        unsubA = colA.onSnapshot(s=>{
-          const arrA = s.docs.map(d=>Object.assign({_id:d.id}, d.data()));
-          records = dedup([...(selYmB? records.filter(r=> toYm(r)!==selYmA):[]), ...arrA, ...(selYmB? records.filter(r=> toYm(r)===selYmB):[])]);
-          set("dbgCntA", String(arrA.length)); render();
-          log("onSnapshot A 觸發，size="+s.size);
-        }, err=> log("onSnapshot A 錯誤："+(err.message||err)));
-      }
-      if (selYmB){
-        const colB = db.collection("profiles").doc("default").collection("months").doc(selYmB).collection("records").orderBy("createdAt","asc");
-        unsubB = colB.onSnapshot(s=>{
-          const arrB = s.docs.map(d=>Object.assign({_id:d.id}, d.data()));
-          records = dedup([...(selYmA? records.filter(r=> toYm(r)!==selYmB):[]), ...arrB, ...(selYmA? records.filter(r=> toYm(r)===selYmA):[])]);
-          set("dbgCntB", String(arrB.length)); render();
-          log("onSnapshot B 觸發，size="+s.size);
-        }, err=> log("onSnapshot B 錯誤："+(err.message||err)));
-      }
-    }
-
-    async function loadSelectedMonths(){
-      const a = fmtMonthInput($("#monthA").value.trim());
-      const b = fmtMonthInput($("#monthB").value.trim());
-      if (!a && !b){ alert("請至少選擇一個月份"); return; }
-      selYmA = a || null; selYmB = b || null;
-      set("dbgYmA", selYmA||"—"); set("dbgYmB", selYmB||"—");
-      set("dbgCntA", "0"); set("dbgCntB", "0");
-      records = [];
-      $("historyDisplay").textContent = "讀取中…";
-
-      try{
-        if (selYmA){ const arrA = await loadOneMonth(selYmA, c=>set("dbgCntA", String(c))); records = records.concat(arrA); }
-        if (selYmB && selYmB!==selYmA){ const arrB = await loadOneMonth(selYmB, c=>set("dbgCntB", String(c))); records = records.concat(arrB); }
-        records = dedup(records);
-        render();
-        rebindRealtime();
-        log(`initialPull 完成：A ${selYmA||"-"}、B ${selYmB||"-"}`);
-      }catch(e){
-        $("historyDisplay").textContent = "讀取失敗："+(e.message||e);
-        log("讀取失敗："+(e.message||e));
-      }
-    }
-
-    function quickPrevNow(){
-      const now = new Date();
-      const ymNow = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
-      const prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
-      const ymPrev = prev.getFullYear()+"-"+String(prev.getMonth()+1).padStart(2,"0");
-      $("#monthA").value = ymPrev;
-      $("#monthB").value = ymNow;
-      loadSelectedMonths();
-    }
-
-    function calculateAndSave(){
-      const cost = parseFloat($("#costPerKg").value||"");
-      const actual = parseFloat($("#actualPrice").value||"");
-      const weight = parseFloat($("#actualWeight").value||"");
-      const dateInput = $("#recordDate").value; // YYYY-MM-DD
-      if (!dateInput) return alert("請選擇『此筆交易日期』，用以決定歸屬月份");
-      if (!isFinite(actual) || !isFinite(weight) || weight<=0) return alert("請輸入有效的成交單價與重量");
-      const bp = isFinite(cost) ? cost : (parseFloat(localStorage.getItem("basePrice")||"")||NaN);
-      if (!isFinite(bp)) return alert("請先輸入『成本(元/kg)』");
-      const deduct = $("#homeDelivery").checked ? 250 : 0;
-      const addSelf = $("#selfDelivery").checked ? weight * 3 : 0;
-      const deductDriver = $("#companyDriver").checked ? weight * 3 : 0;
-      const addKHH = $("#kaohsiungLocal").checked ? 5 : 0;
-      const diff = actual - bp;
-      const bonus = diff > 0 ? diff * weight - deduct - deductDriver + addSelf + addKHH : 0;
-      $("#bonusResult").innerText = String(Math.round(bonus));
-
-      // 以輸入日期決定 LM (YYYY-MM)
-      const ym = ymFromDateInput(dateInput);
-      if (!ym) return alert("日期格式錯誤，請重新選擇");
-      // 儲存的 date 欄位加上時間 00:00
-      const dateStr = dateInput + " 00:00";
-
-      const rec = {date:dateStr,name:$("#salesName").value.trim(),product:$("#productName").value.trim(),
-                   weight, price: actual, total: Math.round(actual*weight*100)/100, bonus: Math.round(bonus), createdAt: Date.now()};
-
-      db.collection("profiles").doc("default").collection("months").doc(ym).collection("records").add(rec)
-        .then(()=>{ log("已寫入 "+ym); })
-        .catch(e=>{ log("寫入失敗："+(e.message||e)); alert("寫入失敗："+(e.message||e)); });
-
-      // 若正好在檢視同月份，先本地加入一筆（等 onSnapshot 也會補正）
-      const toYm = (r)=> ymFromDateInput(r.date?.split(' ')[0]||r.date);
-      if ((selYmA && ym===selYmA) || (selYmB && ym===selYmB)){
-        records = dedup(records.concat([rec]));
-        render();
-      }
-    }
-
-    document.addEventListener("DOMContentLoaded", ()=>{
-      set("dbgProject", FIREBASE_CONFIG.projectId);
-      // default: 今日日期帶入 recordDate
-      const today = new Date();
-      const yyyy = today.getFullYear(), mm = String(today.getMonth()+1).padStart(2,"0"), dd = String(today.getDate()).padStart(2,"0");
-      $("#recordDate").value = `${yyyy}-${mm}-${dd}`;
-
-      const now = new Date();
-      const ymNow = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
-      const prev = new Date(now.getFullYear(),now.getMonth()-1,1);
-      const ymPrev = prev.getFullYear()+"-"+String(prev.getMonth()+1).padStart(2,"0");
-      $("#monthA").value = ymPrev; $("#monthB").value = ymNow;
-
-      $("#btnLoadMonths").onclick = loadSelectedMonths;
-      $("#btnQuickNowPrev").onclick = quickPrevNow;
-      $("#monthA").addEventListener("change", loadSelectedMonths);
-      $("#monthB").addEventListener("change", loadSelectedMonths);
-
-      // view buttons
-      $("#viewA").onclick = ()=>{ viewMode="a"; $("#viewA").setAttribute("aria-pressed","true"); $("#viewAB").setAttribute("aria-pressed","false"); $("#viewB").setAttribute("aria-pressed","false"); render(); };
-      $("#viewAB").onclick = ()=>{ viewMode="ab"; $("#viewA").setAttribute("aria-pressed","false"); $("#viewAB").setAttribute("aria-pressed","true"); $("#viewB").setAttribute("aria-pressed","false"); render(); };
-      $("#viewB").onclick = ()=>{ viewMode="b"; $("#viewA").setAttribute("aria-pressed","false"); $("#viewAB").setAttribute("aria-pressed","false"); $("#viewB").setAttribute("aria-pressed","true"); render(); };
-
-      // price
-      const v0 = localStorage.getItem("basePrice"); if (v0){ document.getElementById("costPerKg").value = v0; (document.getElementById("basePriceDisplay")||{textContent:null}).textContent = String(Math.round(parseFloat(v0)||0)); }
-      document.getElementById("costPerKg").addEventListener("input", ()=>{
-        const v = document.getElementById("costPerKg").value; (document.getElementById("basePriceDisplay")||{textContent:null}).textContent = v ? String(Math.round(parseFloat(v)||0)) : "-"; localStorage.setItem("basePrice", v);
-      });
-
-      ping();
-      // 首次自動載入上月+本月
-      quickPrevNow();
-
-      // 綁定計算/儲存
-      $("#btnCalc").onclick = calculateAndSave;
-      // 匯出
-      $("#btnExport").onclick = ()=>{
-        let list = records.slice();
-        const toYm = (r)=> ymFromDateInput(r.date?.split(' ')[0]||r.date);
-        if (viewMode==="a" && selYmA) list = list.filter(r=> toYm(r)===selYmA);
-        if (viewMode==="b" && selYmB) list = list.filter(r=> toYm(r)===selYmB);
-        if (viewMode==="ab" && selYmA && selYmB) list = list.filter(r=> [selYmA, selYmB].includes(toYm(r)));
-        let csv = "業務姓名,銷售品名,數量(kg),成交單價,總金額,獎金,日期\n";
-        list.forEach(r=> csv += `${r.name||""},${r.product||""},${r.weight},${r.price},${r.total||""},${r.bonus},${r.date}\n`);
-        const blob = new Blob(["\uFEFF"+csv], {type:"text/csv;charset=utf-8;"});
-        const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="業務獎金報表.csv"; a.click();
-      };
-
-      // 刪除（佔位）
-      $("#btnDelPicked").onclick = ()=> alert("批次刪除將於下一版提供（避免跨月誤刪）。");
-    });
-  </script>
-
-<!-- v7 robust month loader + safe overrides -->
-<script>
-(function(){
-  function logDbg(msg){
-    try{
-      const box = document.getElementById("debugBox") || document.createElement("div");
-      if(!box.id){
-        box.id="debugBox";
-        box.style="position:fixed;right:8px;bottom:8px;background:#111;color:#0f0;padding:8px 10px;border-radius:6px;font:12px/1.4 monospace;max-width:48vw;z-index:9999;opacity:.95";
-        document.body.appendChild(box);
-      }
-      const p = document.createElement("div"); p.textContent = msg; box.appendChild(p);
-      console.log("[bonus v7]", msg);
-    }catch(e){}
-  }
-  function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
-  async function ensureDb(){
-    let tries=0;
-    while(!(window.firebase) && tries<200){ await wait(50); tries++; }
-    if (!firebase) throw new Error("Firebase SDK not loaded");
-    if (!window.db) window.db = firebase.firestore();
-    return window.db;
-  }
-  function normYM(s){
-    const m = String(s||'').match(/(\d{4}).*?(\d{1,2})/);
-    return m ? (m[1] + "-" + String(m[2]).padStart(2,'0')) : null;
-  }
-  function detectMonthInputs(){
-    // 依版面寬度由左到右找兩個像月份的輸入
-    const list = Array.from(document.querySelectorAll('input, .flatpickr-input'));
-    const cands = list.filter(el => /年|月|\d{4}[-/]\d{1,2}/.test((el.value||el.placeholder||'')));
-    cands.sort((a,b)=>a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-    return [cands[0] || null, cands[1] || null];
-  }
-  function getYMFromInputs(index){
-    const [a,b] = detectMonthInputs();
-    const el = index===0 ? a : b;
-    return normYM(el ? (el.value || el.getAttribute('value') || el.placeholder || '') : '');
-  }
-  async function readMonthCount(ym){
-    if(!ym) return 0;
-    const d = await ensureDb();
-    const snap = await d.collection('profiles').doc('default').collection('months').doc(ym).collection('records').get();
-    return snap.size||0;
-  }
-  async function fallbackLoadSelected(){
-    try{
-      const A = getYMFromInputs(0);
-      const B = getYMFromInputs(1);
-      const [ca, cb] = await Promise.all([readMonthCount(A), readMonthCount(B)]);
-      logDbg("fallback A("+ (A||'-') +")="+ca+" B("+ (B||'-') +")="+cb);
-      const stat = document.querySelector('[data-role="statusAB"]') || document.createElement('div');
-      stat.dataset.role = "statusAB";
-      stat.style = "position:fixed;left:8px;top:8px;background:#005;padding:6px 8px;color:#fff;border-radius:6px;font:12px monospace;z-index:9999;opacity:.9";
-      stat.textContent = "A("+ (A||'-') +")="+ca+"；B("+ (B||'-') +")="+cb;
-      if(!stat.parentNode) document.body.appendChild(stat);
-    }catch(e){
-      alert("載入月份資料失敗：\n"+e.message);
-      console.error(e);
-    }
-  }
-  // 保存原函式
-  const _origLoad = window.loadSelectedMonths;
-  const _origQuick = window.quickPrevNow;
-  // 覆寫為保底版本
-  window.loadSelectedMonths = async function(){
-    try{
-      if (typeof _origLoad === 'function'){
-        await _origLoad();
-      }else{
-        await fallbackLoadSelected();
-      }
-    }catch(e){
-      logDbg("orig loadSelectedMonths failed: "+e.message);
-      await fallbackLoadSelected();
-    }
-  };
-  window.quickPrevNow = async function(){
-    try{
-      if (typeof _origQuick === 'function'){
-        await _origQuick();
-        return;
-      }
-    }catch(e){ logDbg("orig quickPrevNow failed: "+e.message); }
-    // 若沒有原函式：以今天自動判定本月/上月直接讀筆數
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth()+1;
-    const thisYM = y + "-" + String(m).padStart(2,'0');
-    const pm = (m===1) ? 12 : (m-1);
-    const py = (m===1) ? (y-1) : y;
-    const prevYM = py + "-" + String(pm).padStart(2,'0');
-    const [ca, cb] = await Promise.all([readMonthCount(thisYM), readMonthCount(prevYM)]);
-    logDbg("quickPrevNow fallback A("+thisYM+")="+ca+" B("+prevYM+")="+cb);
-    const stat = document.querySelector('[data-role="statusAB"]') || document.createElement('div');
-    stat.dataset.role = "statusAB";
-    stat.style = "position:fixed;left:8px;top:8px;background:#005;padding:6px 8px;color:#fff;border-radius:6px;font:12px monospace;z-index:9999;opacity:.9";
-    stat.textContent = "A("+ thisYM +")="+ca+"；B("+ prevYM +")="+cb;
-    if(!stat.parentNode) document.body.appendChild(stat);
-  };
-  // 綁定按鈕
-  function bindButtons(){
-    const btns = Array.from(document.querySelectorAll('button,input[type="button"]'));
-    btns.forEach(btn=>{
-      const t = (btn.textContent||btn.value||'').trim();
-      if(/載入所選月份/.test(t)){
-        btn.addEventListener('click', ()=>window.loadSelectedMonths());
-      }
-      if(/一鍵載入/.test(t) || /本月＋上月/.test(t)){
-        btn.addEventListener('click', ()=>window.quickPrevNow());
-      }
-    });
-    logDbg("buttons bound ("+btns.length+")");
-  }
-  document.addEventListener('DOMContentLoaded', async ()=>{
-    try{
-      await ensureDb();
-      bindButtons();
-      if (firebase && firebase.auth){
-        firebase.auth().onAuthStateChanged(async function(u){
-          logDbg("auth state: "+(u?u.uid:'no user'));
-          if (!u){
-            try{ await firebase.auth().signInAnonymously(); }catch(e){ logDbg("signIn error: "+e.message); }
-          }else{
-            // 自動跑一次快載
-            try{ await window.quickPrevNow(); }catch(e){}
-          }
+        firebase.auth().signInAnonymously().catch(function(e){
+          console.warn("匿名登入失敗", e);
         });
+
+        firebase.auth().onAuthStateChanged(function(user){
+          // 只要能跑到這裡，代表 SDK & auth 正常
+          const statusEl = document.getElementById("status");
+          if (!statusEl) return;
+          statusEl.textContent = "已連線 Firebase：" + firebase.app().options.projectId;
+          statusEl.className = "mini ok";
+          document.getElementById("mode").textContent = "儲存模式：Firestore（雲端）";
+        });
+      } catch (e) {
+        console.warn("初始化 Firebase 失敗", e);
+        const statusEl = document.getElementById("status");
+        if (statusEl) {
+          statusEl.textContent = "Firebase 初始化失敗，改用本機模式：" + (e.message || e);
+          statusEl.className = "mini err";
+        }
+        useFirestore = false;
       }
-      // 顯示 projectId
+    }
+
+    // 本機資料存取（當 Firestore 用不到時就用這個）
+    function loadLocalAllData(){
       try{
-        const pid = firebase.app().options.projectId || '-';
-        logDbg("projectId="+pid);
-      }catch(e){}
-    }catch(e){
-      logDbg("init error: "+e.message);
+        const raw = localStorage.getItem("bonusLocalData_cloud");
+        return raw ? JSON.parse(raw) : {};
+      }catch(e){
+        console.error("parse local data error", e);
+        return {};
+      }
     }
-  });
-})();
-</script>
+    function saveLocalAllData(obj){
+      localStorage.setItem("bonusLocalData_cloud", JSON.stringify(obj));
+    }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>💼 業務獎金計算（雲端版：Firestore＋本機備援）</h1>
+    <p class="lead">
+      優先寫入 Firestore：profiles/default/months/{YYYY-MM}/records。<br>
+      若 Firebase 無法使用，會自動改用本機 localStorage，不會讓按鈕失效。
+    </p>
 
+    <!-- 查詢月份 -->
+    <section class="card">
+      <div class="row">
+        <label style="max-width:220px;">
+          <span>查詢月份（YYYY-MM）</span>
+          <input type="month" id="monthInput">
+        </label>
+        <button class="primary" id="btnLoad">載入本月紀錄</button>
+        <button id="btnThisMonth">今天所在月份</button>
+      </div>
+      <div id="status" class="mini">初始化中…</div>
+      <div id="mode" class="mini"></div>
+      <div id="loadStatus" class="mini"></div>
+      <div id="summary" class="strong mini">本月獎金合計：0 元（0 筆）</div>
+    </section>
 
-<!-- v7a sync visible months to hidden #monthA/#monthB and add test-write -->
+    <!-- 新增 -->
+    <section class="card">
+      <h2 style="margin:0 0 8px;font-size:16px;">✏️ 新增交易</h2>
+      <div class="grid grid-2">
+        <label><span>業務姓名</span><input id="salesName"></label>
+        <label><span>品名</span><input id="productName"></label>
+        <label><span>重量 (kg)</span><input id="actualWeight" type="number" step="0.01"></label>
+        <label><span>成交單價 (元/kg)</span><input id="actualPrice" type="number" step="0.01"></label>
+        <label><span>成本 (元/kg)</span><input id="costPerKg" type="number" step="0.01"></label>
+        <label><span>交易日期</span><input id="recordDate" type="date"></label>
+      </div>
+
+      <div class="grid grid-4" style="margin-top:8px;">
+        <label><input type="checkbox" id="homeDelivery"> 宅配 -250</label>
+        <label><input type="checkbox" id="selfDelivery"> 自行配送 +3/kg</label>
+        <label><input type="checkbox" id="companyDriver"> 公司司機 -3/kg</label>
+        <label><input type="checkbox" id="kaohsiungLocal"> 高雄市區 +5</label>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="btnCalc">計算並儲存</button>
+        <button class="ok" id="btnExport">匯出 CSV</button>
+        <button class="danger" id="btnClearForm">清空</button>
+      </div>
+
+      <p class="mini">記憶成本：<span id="basePriceDisplay">-</span> 元/kg</p>
+      <p class="strong">本次獎金：<span id="bonusResult">0</span> 元</p>
+    </section>
+
+    <!-- 列表 -->
+    <section class="card">
+      <h2 style="margin:0 0 8px;font-size:16px;">📋 當月紀錄</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>日期</th><th>業務</th><th>品名</th>
+              <th>重量</th><th>單價</th><th>總額</th><th>獎金</th>
+            </tr>
+          </thead>
+          <tbody id="recordsBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
 <script>
-(function(){
-  function normYM(s){
-    var m = String(s||'').match(/(\d{4}).*?(\d{1,2})/);
-    return m ? (m[1] + "-" + String(m[2]).padStart(2,'0')) : "";
-  }
-  function detectMonthInputs(){
-    var list = Array.prototype.slice.call(document.querySelectorAll('input, .flatpickr-input'));
-    var cands = list.filter(function(el){ return /(年|月|\d{4}[-/]\d{1,2})/.test((el.value||el.placeholder||'')); });
-    cands.sort(function(a,b){ return a.getBoundingClientRect().left - b.getBoundingClientRect().left; });
-    return [cands[0]||null, cands[1]||null];
-  }
-  function syncHidden(){
-    try{
-      var a = document.getElementById('monthA');
-      var b = document.getElementById('monthB');
-      var vis = detectMonthInputs();
-      var va = vis[0] ? (vis[0].value || vis[0].placeholder || '') : '';
-      var vb = vis[1] ? (vis[1].value || vis[1].placeholder || '') : '';
-      if (a) a.value = normYM(va);
-      if (b) b.value = normYM(vb);
-    }catch(e){}
-  }
-  document.addEventListener('input', function(e){ if(e.target && (e.target.matches('input')||e.target.classList.contains('flatpickr-input'))) syncHidden(); }, true);
-  document.addEventListener('change', function(){ syncHidden(); }, true);
-  document.addEventListener('DOMContentLoaded', function(){ setTimeout(syncHidden, 600); });
-})();
-</script>
+const $ = id => document.getElementById(id);
 
+function ymFromDateInput(d){
+  if(!d) return "";
+  const m = d.match(/(\d{4})-(\d{1,2})/);
+  return m ? m[1] + "-" + String(parseInt(m[2],10)).padStart(2,"0") : "";
+}
 
-<!-- v7a: floating test-write button -->
-<div id="testWriteBtn" style="position:fixed;right:12px;bottom:12px;padding:8px 10px;background:#0a0;color:#fff;border-radius:8px;font:12px/1.2 sans-serif;cursor:pointer;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.2)">一鍵測試寫入</div>
-<script>
-(function(){
-  async function testWrite(){
+function formatDateOnly(v){
+  if(!v) return "";
+  const m = String(v).match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m) return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
+  return v;
+}
+
+// 本機快取
+let localAllData = loadLocalAllData(); // { "YYYY-MM": [records...] }
+let currentMonth = "";
+let currentRows = [];
+
+async function loadMonthRecords(){
+  const m = $("monthInput").value;
+  if(!m){ alert("請先選擇月份"); return; }
+  currentMonth = m;
+  $("loadStatus").textContent = "載入中…";
+  $("recordsBody").innerHTML = "";
+  currentRows = [];
+
+  // 優先從 Firestore 讀
+  if(useFirestore && db){
     try{
-      const db = (window.db || firebase.firestore());
-      const now = new Date();
-      const ym = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,'0');
-      const ref = db.collection('profiles').doc('default').collection('months').doc(ym).collection('records');
-      const payload = {
-        createdAt: Date.now(),
-        note: 'TEST-WRITE from v7a',
-        qty: 1,
-        pricePerKg: 0,
-        seller: 'TEST'
-      };
-      const docRef = await ref.add(payload);
-      alert('寫入成功：' + ym + ' / ' + docRef.id);
+      const snap = await db.collection("profiles").doc("default")
+        .collection("months").doc(m)
+        .collection("records").orderBy("createdAt","asc").get();
+      currentRows = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
+      // 同步一份到本機快取（方便離線時也能看到）
+      localAllData[m] = currentRows;
+      saveLocalAllData(localAllData);
+      renderTable();
+      $("loadStatus").textContent = `已從 Firestore 載入 ${m}，共 ${currentRows.length} 筆紀錄。`;
+      return;
     }catch(e){
-      alert('寫入失敗：' + e.message);
-      console.error(e);
+      console.warn("讀取 Firestore 失敗，改用本機資料", e);
+      $("status").textContent = "讀取 Firestore 失敗，改用本機資料：" + (e.message||e);
+      $("status").className = "mini err";
+      // 讓它往下走，用本機資料
     }
   }
-  document.addEventListener('DOMContentLoaded', function(){
-    var btn = document.getElementById('testWriteBtn');
-    if (btn) btn.addEventListener('click', testWrite);
-  });
-})();
-</script>
 
+  // Firestore 不可用 or 失敗 → 用本機
+  currentRows = localAllData[m] || [];
+  renderTable();
+  $("mode").textContent = "儲存模式：本機 localStorage";
+  $("loadStatus").textContent = `已從本機載入 ${m}，共 ${currentRows.length} 筆紀錄。`;
+}
+
+function renderTable(){
+  const tb = $("recordsBody");
+  tb.innerHTML = "";
+  let sum = 0;
+  currentRows.forEach((r,i)=>{
+    sum += Number(r.bonus || 0);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${i+1}</td>
+      <td>${formatDateOnly(r.date)}</td>
+      <td>${r.name||""}</td>
+      <td>${r.product||""}</td>
+      <td>${r.weight}</td>
+      <td>${r.price}</td>
+      <td>${r.total}</td>
+      <td>${r.bonus}</td>`;
+    tb.appendChild(tr);
+  });
+  $("summary").textContent = `本月獎金合計：${sum} 元（${currentRows.length} 筆）`;
+}
+
+async function calculateAndSave(){
+  const cost = parseFloat($("costPerKg").value);
+  const price = parseFloat($("actualPrice").value);
+  const w = parseFloat($("actualWeight").value);
+  const d = $("recordDate").value;
+
+  if(!d){ alert("請選交易日期"); return; }
+  if(!isFinite(price) || !isFinite(w) || w<=0){ alert("請輸入有效重量與單價"); return; }
+  if(!isFinite(cost)){ alert("請輸入成本"); return; }
+
+  localStorage.setItem("basePrice", cost);
+  $("basePriceDisplay").textContent = cost;
+
+  let bonus = (price - cost) * w;
+  if($("homeDelivery").checked) bonus -= 250;
+  if($("selfDelivery").checked) bonus += 3*w;
+  if($("companyDriver").checked) bonus -= 3*w;
+  if($("kaohsiungLocal").checked) bonus += 5;
+  bonus = Math.round(Math.max(bonus, 0));
+  $("bonusResult").textContent = bonus;
+
+  const ym = ymFromDateInput(d);
+  if(!ym){ alert("日期格式有問題"); return; }
+
+  const rec = {
+    date: d + " 00:00",
+    name: $("salesName").value.trim(),
+    product: $("productName").value.trim(),
+    weight: w,
+    price: price,
+    total: Math.round(price*w*100)/100,
+    bonus: bonus,
+    createdAt: Date.now()
+  };
+
+  // 先寫入本機
+  if(!localAllData[ym]) localAllData[ym] = [];
+  localAllData[ym].push(rec);
+  saveLocalAllData(localAllData);
+
+  let savedTo = "本機 localStorage";
+
+  // 再嘗試寫入 Firestore
+  if(useFirestore && db){
+    try{
+      await db.collection("profiles").doc("default")
+        .collection("months").doc(ym)
+        .collection("records").add(rec);
+      savedTo = "Firestore（雲端）＋本機";
+    }catch(e){
+      console.warn("寫入 Firestore 失敗，僅存本機", e);
+      $("status").textContent = "寫入 Firestore 失敗，僅存本機：" + (e.message||e);
+      $("status").className = "mini err";
+    }
+  }
+
+  if(currentMonth === ym){
+    currentRows.push(rec);
+    renderTable();
+  }
+
+  $("loadStatus").textContent = `已儲存 1 筆到 ${ym}（${savedTo}），目前本機共 ${localAllData[ym].length} 筆。`;
+  alert("已完成計算並儲存（" + savedTo + "）！");
+}
+
+function exportCsv(){
+  if(!currentRows.length){ alert("目前沒有任何紀錄"); return; }
+  let csv = "業務,品名,重量,單價,總額,獎金,日期\n";
+  currentRows.forEach(r=>{
+    csv += `${r.name||""},${r.product||""},${r.weight},${r.price},${r.total},${r.bonus},${formatDateOnly(r.date)}\n`;
+  });
+  const blob = new Blob(["\uFEFF"+csv], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `bonus_${currentMonth||"all"}.csv`;
+  a.click();
+}
+
+function clearForm(){
+  ["salesName","productName","actualWeight","actualPrice","recordDate"].forEach(id=>$(id).value="");
+  ["homeDelivery","selfDelivery","companyDriver","kaohsiungLocal"].forEach(id=>$(id).checked=false);
+  $("bonusResult").textContent = "0";
+}
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  const t = new Date();
+  const y = t.getFullYear();
+  const m = String(t.getMonth()+1).padStart(2,"0");
+  const d = String(t.getDate()).padStart(2,"0");
+  $("recordDate").value = `${y}-${m}-${d}`;
+  $("monthInput").value = `${y}-${m}`;
+
+  const bp = localStorage.getItem("basePrice");
+  if(bp){
+    $("costPerKg").value = bp;
+    $("basePriceDisplay").textContent = bp;
+  }
+
+  // 初始化 Firebase（安全模式）
+  initFirebaseSafe();
+  if(!useFirestore){
+    $("status").textContent = "Firebase 不可用，暫時使用本機 localStorage。";
+    $("status").className = "mini err";
+    $("mode").textContent = "儲存模式：本機 localStorage";
+  } else {
+    $("mode").textContent = "儲存模式：Firestore（雲端）";
+  }
+
+  $("btnLoad").onclick = loadMonthRecords;
+  $("btnThisMonth").onclick = ()=>{ $("monthInput").value = `${y}-${m}`; loadMonthRecords(); };
+  $("btnCalc").onclick = calculateAndSave;
+  $("btnExport").onclick = exportCsv;
+  $("btnClearForm").onclick = clearForm;
+
+  // 進來就先載入當月（如果有）
+  loadMonthRecords();
+});
+</script>
 </body>
 </html>
