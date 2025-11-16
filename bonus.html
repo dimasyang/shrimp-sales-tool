@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>💼 業務獎金計算（雲端版：Firestore＋本機備援）</title>
+  <title>💼 業務獎金計算（雲端簡化版 v2）</title>
   <style>
     :root{--bg:#f5f5f5;--card:#fff;--bd:#ddd;--muted:#666;--brand:#4f8cff;--brand2:#7aa2ff}
     *{box-sizing:border-box}
@@ -49,7 +49,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
   <script>
-    // Firestore 專案設定（跟你原本的一樣）
+    // Firestore 專案設定
     const firebaseConfig = {
       apiKey: "AIzaSyBw4SbJMjNxoj6P9Zwi4SAlSIi30A8uAp4",
       authDomain: "sales-bonusrecord.firebaseapp.com",
@@ -61,7 +61,7 @@
     };
 
     let db = null;
-    let useFirestore = false; // true = 寫入雲端, false = 只用本機
+    let useFirestore = false; // true = 優先 Firestore
 
     function initFirebaseSafe() {
       try {
@@ -81,12 +81,11 @@
         });
 
         firebase.auth().onAuthStateChanged(function(user){
-          // 只要能跑到這裡，代表 SDK & auth 正常
           const statusEl = document.getElementById("status");
           if (!statusEl) return;
           statusEl.textContent = "已連線 Firebase：" + firebase.app().options.projectId;
           statusEl.className = "mini ok";
-          document.getElementById("mode").textContent = "儲存模式：Firestore（雲端）";
+          document.getElementById("mode").textContent = "儲存模式：Firestore（雲端優先）";
         });
       } catch (e) {
         console.warn("初始化 Firebase 失敗", e);
@@ -99,7 +98,7 @@
       }
     }
 
-    // 本機資料存取（當 Firestore 用不到時就用這個）
+    // 本機資料存取
     function loadLocalAllData(){
       try{
         const raw = localStorage.getItem("bonusLocalData_cloud");
@@ -116,10 +115,10 @@
 </head>
 <body>
   <div class="container">
-    <h1>💼 業務獎金計算（雲端版：Firestore＋本機備援）</h1>
+    <h1>💼 業務獎金計算（雲端簡化版 v2）</h1>
     <p class="lead">
-      優先寫入 Firestore：profiles/default/months/{YYYY-MM}/records。<br>
-      若 Firebase 無法使用，會自動改用本機 localStorage，不會讓按鈕失效。
+      ✅ 使用舊系統同一個路徑：profiles/default/months/{YYYY-MM}/records。<br>
+      ✅ 額外用「日期欄位」再過濾一次，只顯示所選月份（不會出現「查 11 月跑出 9 月」的狀況）。
     </p>
 
     <!-- 查詢月份 -->
@@ -187,16 +186,19 @@
 <script>
 const $ = id => document.getElementById(id);
 
-function ymFromDateInput(d){
-  if(!d) return "";
-  const m = d.match(/(\d{4})-(\d{1,2})/);
-  return m ? m[1] + "-" + String(parseInt(m[2],10)).padStart(2,"0") : "";
+function ymFromDateInput(dateStr){
+  // 支援 YYYY-MM-DD 或 YYYY/M/D
+  if(!dateStr) return "";
+  const m = String(dateStr).match(/(\d{4})[\/\-](\d{1,2})/);
+  if(!m) return "";
+  return m[1] + "-" + String(parseInt(m[2],10)).padStart(2,"0");
 }
 
 function formatDateOnly(v){
   if(!v) return "";
-  const m = String(v).match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if(m) return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
+  // 允許像 "2025/9/2 上午10:09:35"
+  const m = String(v).match(/(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/);
+  if(m) return m[1];
   return v;
 }
 
@@ -216,11 +218,20 @@ async function loadMonthRecords(){
   // 優先從 Firestore 讀
   if(useFirestore && db){
     try{
-      const snap = await db.collection("profiles").doc("default")
+      const col = db.collection("profiles").doc("default")
         .collection("months").doc(m)
-        .collection("records").orderBy("createdAt","asc").get();
-      currentRows = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
-      // 同步一份到本機快取（方便離線時也能看到）
+        .collection("records").orderBy("createdAt","asc");
+      const snap = await col.get();
+      const allRows = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
+
+      // ⭐ 再用日期欄位過濾一次，只保留真正屬於 m 的資料
+      const filtered = allRows.filter(r=>{
+        const datePart = (r.date || "").split(" ")[0] || r.date;
+        return ymFromDateInput(datePart) === m;
+      });
+
+      currentRows = filtered;
+      // 同步到本機
       localAllData[m] = currentRows;
       saveLocalAllData(localAllData);
       renderTable();
@@ -228,14 +239,17 @@ async function loadMonthRecords(){
       return;
     }catch(e){
       console.warn("讀取 Firestore 失敗，改用本機資料", e);
-      $("status").textContent = "讀取 Firestore 失敗，改用本機資料：" + (e.message||e);
+      $("status").textContent = "讀取 Firestore 失敗，改用本機：" + (e.message||e);
       $("status").className = "mini err";
-      // 讓它往下走，用本機資料
     }
   }
 
-  // Firestore 不可用 or 失敗 → 用本機
-  currentRows = localAllData[m] || [];
+  // Firestore 不可用 or 讀取失敗 → 用本機快取
+  const allRows = localAllData[m] || [];
+  currentRows = allRows.filter(r=>{
+    const datePart = (r.date || "").split(" ")[0] || r.date;
+    return ymFromDateInput(datePart) === m;
+  });
   renderTable();
   $("mode").textContent = "儲存模式：本機 localStorage";
   $("loadStatus").textContent = `已從本機載入 ${m}，共 ${currentRows.length} 筆紀錄。`;
@@ -323,7 +337,7 @@ async function calculateAndSave(){
     renderTable();
   }
 
-  $("loadStatus").textContent = `已儲存 1 筆到 ${ym}（${savedTo}），目前本機共 ${localAllData[ym].length} 筆。`;
+  $("loadStatus").textContent = `已儲存 1 筆到 ${ym}（${savedTo}）。`;
   alert("已完成計算並儲存（" + savedTo + "）！");
 }
 
@@ -360,14 +374,12 @@ document.addEventListener("DOMContentLoaded", ()=>{
     $("basePriceDisplay").textContent = bp;
   }
 
-  // 初始化 Firebase（安全模式）
+  // 初始化 Firebase
   initFirebaseSafe();
   if(!useFirestore){
     $("status").textContent = "Firebase 不可用，暫時使用本機 localStorage。";
     $("status").className = "mini err";
     $("mode").textContent = "儲存模式：本機 localStorage";
-  } else {
-    $("mode").textContent = "儲存模式：Firestore（雲端）";
   }
 
   $("btnLoad").onclick = loadMonthRecords;
@@ -376,7 +388,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
   $("btnExport").onclick = exportCsv;
   $("btnClearForm").onclick = clearForm;
 
-  // 進來就先載入當月（如果有）
+  // 進來就先載入當月
   loadMonthRecords();
 });
 </script>
