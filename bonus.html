@@ -41,6 +41,7 @@
     #status.err{color:#b91c1c}
     #mode{font-size:12px;margin-top:2px;color:#4b5563}
     #loadStatus{font-size:12px;margin-top:2px;color:#4b5563}
+    .btn-del{font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #fecaca;background:#fee2e2;color:#b91c1c}
   </style>
 
   <!-- Firebase compat SDKs -->
@@ -174,7 +175,7 @@
           <thead>
             <tr>
               <th>#</th><th>日期</th><th>業務</th><th>品名</th>
-              <th>重量</th><th>單價</th><th>總額</th><th>獎金</th>
+              <th>重量</th><th>單價</th><th>總額</th><th>獎金</th><th>操作</th>
             </tr>
           </thead>
           <tbody id="recordsBody"></tbody>
@@ -270,10 +271,46 @@ function renderTable(){
       <td>${r.weight}</td>
       <td>${r.price}</td>
       <td>${r.total}</td>
-      <td>${r.bonus}</td>`;
+      <td>${r.bonus}</td>
+      <td><button class="btn-del" data-index="${i}">刪除</button></td>`;
     tb.appendChild(tr);
   });
   $("summary").textContent = `本月獎金合計：${sum} 元（${currentRows.length} 筆）`;
+}
+
+async function deleteRecord(index){
+  const rec = currentRows[index];
+  if(!rec){ alert("找不到這筆紀錄"); return; }
+
+  const ym = ymFromDateInput(formatDateOnly(rec.date));
+  if(!ym){ alert("這筆紀錄的日期格式有問題，無法判斷月份"); return; }
+
+  // 先從目前列表移除
+  currentRows.splice(index,1);
+
+  // 同步更新本機快取
+  if(!localAllData[ym]) localAllData[ym] = [];
+  localAllData[ym] = currentRows.slice();
+  saveLocalAllData(localAllData);
+
+  let deletedFrom = "本機 localStorage";
+
+  // 再嘗試刪除 Firestore
+  if(useFirestore && db && rec.id){
+    try{
+      await db.collection("profiles").doc("default")
+        .collection("months").doc(ym)
+        .collection("records").doc(rec.id).delete();
+      deletedFrom = "Firestore（雲端）＋本機";
+    }catch(e){
+      console.warn("刪除 Firestore 失敗，僅刪本機", e);
+      $("status").textContent = "刪除 Firestore 失敗，僅刪本機：" + (e.message||e);
+      $("status").className = "mini err";
+    }
+  }
+
+  renderTable();
+  $("loadStatus").textContent = `已刪除 1 筆（${deletedFrom}）。`;
 }
 
 async function calculateAndSave(){
@@ -321,9 +358,10 @@ async function calculateAndSave(){
   // 再嘗試寫入 Firestore
   if(useFirestore && db){
     try{
-      await db.collection("profiles").doc("default")
+      const docRef = await db.collection("profiles").doc("default")
         .collection("months").doc(ym)
         .collection("records").add(rec);
+      rec.id = docRef.id; // ⭐ 重要：保存 Firestore id，供日後刪除
       savedTo = "Firestore（雲端）＋本機";
     }catch(e){
       console.warn("寫入 Firestore 失敗，僅存本機", e);
@@ -388,9 +426,21 @@ document.addEventListener("DOMContentLoaded", ()=>{
   $("btnExport").onclick = exportCsv;
   $("btnClearForm").onclick = clearForm;
 
+  // 列表中的刪除按鈕（事件委派）
+  $("recordsBody").addEventListener("click", async (e)=>{
+    const btn = e.target.closest(".btn-del");
+    if(!btn) return;
+    const index = Number(btn.dataset.index);
+    if(Number.isNaN(index)) return;
+    const ok = confirm("確定要刪除這筆紀錄嗎？\n（雲端與本機資料將一併刪除）");
+    if(!ok) return;
+    await deleteRecord(index);
+  });
+
   // 進來就先載入當月
   loadMonthRecords();
 });
 </script>
 </body>
 </html>
+
